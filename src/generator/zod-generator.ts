@@ -256,7 +256,12 @@ const generateZodSchemaString = (schema: z.ZodType<any>): string => {
 
   if (schema instanceof z.ZodEnum) {
     const values = (schema as any)._def.values;
-    const enumValues = values.map((v: string) => `'${v}'`).join(', ');
+    const enumValues = values
+      .map((v: string) => {
+        v = v.replace("'", "\\'");
+        return `'${v}'`;
+      })
+      .join(', ');
     return `z.enum([${enumValues}])`;
   }
 

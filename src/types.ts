@@ -43,7 +43,7 @@ export interface GenerateOptions {
 }
 
 export interface AirtableAiTextValue {
-  state: 'generated' | 'pending' | 'error' | 'empty';
+  state: 'generated' | 'pending' | 'error' | 'empty' | "quote's";
   value: string;
   isStale: boolean;
 }

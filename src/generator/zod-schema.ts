@@ -179,7 +179,7 @@ export const mapAirtableTypeToZod = (field: AirtableField): ZodMappingResult => 
 
     case 'aiText':
       schema = z.object({
-        state: z.enum(['generated', 'pending', 'error', 'empty']),
+        state: z.enum(['generated', 'pending', 'error', 'empty', "quote's"]),
         value: z.string(),
         isStale: z.boolean(),
       });
