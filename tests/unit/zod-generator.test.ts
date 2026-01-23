@@ -38,7 +38,7 @@ describe('Zod Generator', () => {
       expect(result).toContain('Name: z.string()');
       
       // Email field
-      expect(result).toContain("Email: z.string().email('Invalid email format')");
+      expect(result).toContain('Email: z.string().email("Invalid email format")');
       
       // Number field
       expect(result).toContain('Age: z.number()');
@@ -104,13 +104,13 @@ describe('Zod Generator', () => {
     it('should include all tables in union types', () => {
       const result = generateUtilityZodTypes(mockSchema);
 
-      expect(result).toContain("'Users'");
+      expect(result).toContain('"Users"');
 
       // Should contain schema and type mappings
-  expect(result).toContain("'Users': { schema: typeof UsersSchema, type: UsersRecord }");
+  expect(result).toContain('"Users": { schema: typeof UsersSchema, type: UsersRecord }');
 
       // Check table names array runtime constant
-      expect(result).toContain("AIRTABLE_TABLE_NAMES = ['Users', 'Projects'] as const;");
+      expect(result).toContain('AIRTABLE_TABLE_NAMES = ["Users", "Projects"] as const;');
 
   // Always include readonly fields arrays
   expect(result).toContain('UsersReadonlyFields');
@@ -126,7 +126,7 @@ describe('Zod Generator', () => {
 
       // Check table names array runtime constant is present in flatten mode too
       expect(result).toContain('export const AIRTABLE_TABLE_NAMES');
-      expect(result).toContain("AIRTABLE_TABLE_NAMES = ['Users', 'Projects'] as const;");
+      expect(result).toContain('AIRTABLE_TABLE_NAMES = ["Users", "Projects"] as const;');
 
       // Per-table readonly fields array
       expect(result).toContain('UsersReadonlyFields');
@@ -154,7 +154,7 @@ describe('Zod Generator', () => {
       const result = generateTableZodSchema(tableWithSpecialChars, true);
       
       // Should use bracket notation for special characters
-      expect(result).toContain('["Field with spaces & symbols!"]');
+      expect(result).toContain('"Field with spaces & symbols!"');
     });
 
     it('should generate proper Zod validation for different field types', () => {
@@ -193,17 +193,17 @@ describe('Zod Generator', () => {
       const result = generateTableZodSchema(tableWithAllTypes, true);
 
       expect(result).toContain('Text: z.string()');
-      expect(result).toContain("Email: z.string().email('Invalid email format')");
-      expect(result).toContain("URL: z.string().url('Invalid URL format')");
-      expect(result).toContain("Phone: z.string().regex(/^[\\+]?[1-9][\\d]{0,15}$/, 'Invalid phone number format')");
+      expect(result).toContain('Email: z.string().email("Invalid email format")');
+      expect(result).toContain('URL: z.string().url("Invalid URL format")');
+      expect(result).toContain('Phone: z.string().regex(/^[\\+]?[1-9][\\d]{0,15}$/, "Invalid phone number format")');
       expect(result).toContain('Number: z.number()');
       expect(result).toContain('Checkbox: z.boolean()');
-      expect(result).toContain("Date: z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/, 'Invalid date format (YYYY-MM-DD)')");
-      expect(result).toContain("DateTime: z.string().datetime('Invalid ISO datetime format')");
-      expect(result).toContain("Select: z.enum(['Option1', 'Option2'])");
-      expect(result).toContain("MultiSelect: z.array(z.enum(['Tag1', 'Tag2']))");
+      expect(result).toContain('Date: z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/, "Invalid date format (YYYY-MM-DD)")');
+      expect(result).toContain('DateTime: z.string().datetime("Invalid ISO datetime format")');
+      expect(result).toContain('Select: z.enum(["Option1", "Option2"])');
+      expect(result).toContain('MultiSelect: z.array(z.enum(["Tag1", "Tag2"]))');
       expect(result).toContain('AiText: z.object({');
-      expect(result).toContain("state: z.enum(['generated', 'pending', 'error', 'empty'])");
+      expect(result).toContain('state: z.enum(["generated", "pending", "error", "empty"])');
       expect(result).toContain('value: z.string()');
       expect(result).toContain('isStale: z.boolean()');
     });
@@ -223,8 +223,8 @@ describe('Zod Generator', () => {
 
       const result = generateTableZodSchema(aiTextTable, true);
 
-      expect(result).toContain('["AI Summary"]: z.object({');
-      expect(result).toContain("state: z.enum(['generated', 'pending', 'error', 'empty'])");
+      expect(result).toContain('"AI Summary": z.object({');
+      expect(result).toContain('state: z.enum(["generated", "pending", "error", "empty"])');
       expect(result).toContain('value: z.string()');
       expect(result).toContain('isStale: z.boolean()');
       expect(result).toContain('}).readonly()'); // Should be readonly since aiText is computed

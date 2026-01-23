@@ -29,8 +29,8 @@ describe('AI Text Integration Tests', () => {
     const result = generateTableZodSchema(usersTable, true);
 
     // Check Zod object structure
-    expect(result).toContain('["AI Summary"]: z.object({');
-    expect(result).toContain("state: z.enum(['generated', 'pending', 'error', 'empty'])");
+    expect(result).toContain('"AI Summary": z.object({');
+    expect(result).toContain('state: z.enum(["generated", "pending", "error", "empty"])');
     expect(result).toContain('value: z.string()');
     expect(result).toContain('isStale: z.boolean()');
     
@@ -52,7 +52,7 @@ describe('AI Text Integration Tests', () => {
     
     // The generated schema should be able to validate aiText structure
     expect(zodSchema).toContain('z.object({');
-    expect(zodSchema).toContain("state: z.enum(['generated', 'pending', 'error', 'empty'])");
+    expect(zodSchema).toContain('state: z.enum(["generated", "pending", "error", "empty"])');
     expect(zodSchema).toContain('value: z.string()');
     expect(zodSchema).toContain('isStale: z.boolean()');
   });
@@ -62,10 +62,10 @@ describe('AI Text Integration Tests', () => {
     const result = generateTableZodSchema(usersTable, true);
 
     // All possible states should be in the enum
-    expect(result).toContain("'generated'");
-    expect(result).toContain("'pending'");  
-    expect(result).toContain("'error'");
-    expect(result).toContain("'empty'");
+    expect(result).toContain('"generated"');
+    expect(result).toContain('"pending"');  
+    expect(result).toContain('"error"');
+    expect(result).toContain('"empty"');
   });
 
   it('should preserve field name with special characters in aiText', () => {
@@ -85,6 +85,6 @@ describe('AI Text Integration Tests', () => {
     const result = generateTableZodSchema(specialTable, true);
     
     // Should use bracket notation for special characters
-    expect(result).toContain('["AI Summary & Analysis!"]: z.object({');
+    expect(result).toContain('"AI Summary & Analysis!": z.object({');
   });
 });

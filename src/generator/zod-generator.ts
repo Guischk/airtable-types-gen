@@ -90,7 +90,7 @@ export const generateTableZodSchema = (
 
       // Add property
       const needsBrackets = /[^a-zA-Z0-9_$]/.test(propertyName);
-      const propertyKey = needsBrackets ? `["${propertyName.replace(/"/g, '\\"')}"]` : propertyName;
+      const propertyKey = needsBrackets ? JSON.stringify(propertyName) : propertyName;
 
       // Convert Zod schema to string representation
       let schemaStr = generateZodSchemaString(zodMapping.schema);
@@ -164,7 +164,7 @@ export const generateTableZodSchema = (
 
       // Add property
       const needsBrackets = /[^a-zA-Z0-9_$]/.test(propertyName);
-      const propertyKey = needsBrackets ? `["${propertyName.replace(/"/g, '\\"')}"]` : propertyName;
+      const propertyKey = needsBrackets ? JSON.stringify(propertyName) : propertyName;
 
       // Convert Zod schema to string representation
       let schemaStr = generateZodSchemaString(zodMapping.schema);
@@ -215,16 +215,16 @@ const generateZodSchemaString = (schema: z.ZodType<any>): string => {
     for (const check of checks) {
       switch (check.kind) {
         case 'email':
-          str += `.email('${check.message || 'Invalid email format'}')`;
+          str += `.email(${JSON.stringify(check.message || 'Invalid email format')})`;
           break;
         case 'url':
-          str += `.url('${check.message || 'Invalid URL format'}')`;
+          str += `.url(${JSON.stringify(check.message || 'Invalid URL format')})`;
           break;
         case 'regex':
-          str += `.regex(${check.regex}, '${check.message || 'Invalid format'}')`;
+          str += `.regex(${check.regex}, ${JSON.stringify(check.message || 'Invalid format')})`;
           break;
         case 'datetime':
-          str += `.datetime('${check.message || 'Invalid ISO datetime format'}')`;
+          str += `.datetime(${JSON.stringify(check.message || 'Invalid ISO datetime format')})`;
           break;
       }
     }
@@ -256,7 +256,7 @@ const generateZodSchemaString = (schema: z.ZodType<any>): string => {
 
   if (schema instanceof z.ZodEnum) {
     const values = (schema as any)._def.values;
-    const enumValues = values.map((v: string) => `'${v}'`).join(', ');
+    const enumValues = values.map((v: string) => JSON.stringify(v)).join(', ');
     return `z.enum([${enumValues}])`;
   }
 
@@ -297,19 +297,15 @@ export const generateUtilityZodTypes = (
   options?: { flatten?: boolean }
 ): string => {
   const flatten = options?.flatten ?? false;
-  const tableNames = schema.tables
-    .map((table) => `'${table.name.replace(/'/g, "\\'")}'`)
-    .join(' | ');
+  const tableNames = schema.tables.map((table) => JSON.stringify(table.name)).join(' | ');
 
-  const tableNamesArray = schema.tables
-    .map((table) => `'${table.name.replace(/'/g, "\\'")}'`)
-    .join(', ');
+  const tableNamesArray = schema.tables.map((table) => JSON.stringify(table.name)).join(', ');
 
   const schemaExports = schema.tables
     .map((table) => {
       const schemaName = generateSchemaName(table.name);
       const typeName = generateTypeName(table.name);
-      return `  '${table.name.replace(/'/g, "\\'")}': { schema: typeof ${schemaName}, type: ${typeName} };`;
+      return `  ${JSON.stringify(table.name)}: { schema: typeof ${schemaName}, type: ${typeName} };`;
     })
     .join('\n');
 
@@ -319,7 +315,7 @@ export const generateUtilityZodTypes = (
       const typeBase = generateSchemaName(table.name).replace(/Schema$/, '');
       const readonlyFields = table.fields
         .filter((f) => enrichFieldMetadata(f).isReadonly)
-        .map((f) => `'${f.name.replace(/'/g, "\\'")}'`)
+        .map((f) => JSON.stringify(f.name))
         .join(', ');
       return `// Readonly fields for ${table.name}\nexport const ${typeBase}ReadonlyFields = [${readonlyFields}] as const;`;
     })

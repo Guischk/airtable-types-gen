@@ -101,7 +101,7 @@ describe('Multi-File Generator', () => {
 
       expect(result).toContain('// Auto-generated index file');
       expect(result).toContain('export { UsersSchema, type UsersRecord }');
-      expect(result).toContain("export type AirtableTableName = 'Users'");
+      expect(result).toContain('export type AirtableTableName = "Users"');
       expect(result).toContain('export interface AirtableTableSchemas');
       expect(result).toContain('export type GetTableSchema<T extends AirtableTableName>');
       expect(result).toContain('export type GetTableType<T extends AirtableTableName>');
