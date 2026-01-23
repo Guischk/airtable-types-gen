@@ -1,7 +1,7 @@
 {
   "name": "airtable-types-gen",
   "author": "guischk",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Generate Zod schemas with TypeScript types from Airtable base schemas featuring readonly validation and perfect type alignment",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -47,6 +47,7 @@
   "dependencies": {
     "airtable": "^0.12.2",
     "dotenv": "^16.4.5",
+    "node-fetch": "^3.3.2",
     "zod": "^3.23.8"
   },
   "devDependencies": {

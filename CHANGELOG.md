@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2026-01-23
+
+### 🐛 Fixed
+
+- **Robust String Escaping** - Fixed a critical issue where special characters (like single quotes) in field options caused syntax errors in generated Zod schemas.
+  - Replaced manual quoting with `JSON.stringify()` for all string literals.
+  - Properly handles apostrophes in enum choices (e.g., "User's Field").
+  - Ensures correct escaping for validation messages, regex patterns, and URLs.
+  - Fixes table name quoting in generated utility types and unions.
+  - Updates Zod schema generation to consistently use double quotes for string literals.
+
 ## [0.4.0] - 2025-09-20
 
 ### ✨ Added
