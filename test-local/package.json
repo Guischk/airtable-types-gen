@@ -6,30 +6,31 @@
   "type": "module",
   "scripts": {
     "test": "node run-all-tests.js",
-    "generate": "node ../dist/cli/index.js --base-id $AIRTABLE_BASE_ID --output generated/types.ts",
-    "generate:flatten": "node ../dist/cli/index.js --base-id $AIRTABLE_BASE_ID --flatten --output generated/types-flat.ts",
-    "generate:zod": "node ../dist/cli/index.js --base-id $AIRTABLE_BASE_ID --format zod --output generated/zod-schemas.ts",
-    "generate:zod-flat": "node ../dist/cli/index.js --base-id $AIRTABLE_BASE_ID --format zod --flatten --output generated/zod-schemas-flat.ts",
-    "generate:multi-ts": "node ../dist/cli/index.js --base-id $AIRTABLE_BASE_ID --separate-files --output generated/types/",
-    "generate:multi-zod": "node ../dist/cli/index.js --base-id $AIRTABLE_BASE_ID --format zod --separate-files --output generated/schemas/",
+    "generate": "node ../dist/cli/index.js --base-id $AIRTABLE_BASE_ID --typescript-only --output generated/types.ts",
+    "generate:flatten": "node ../dist/cli/index.js --base-id $AIRTABLE_BASE_ID --typescript-only --flatten --output generated/types-flat.ts",
+    "generate:zod": "node ../dist/cli/index.js --base-id $AIRTABLE_BASE_ID --output generated/zod-schemas.ts",
+    "generate:zod-flat": "node ../dist/cli/index.js --base-id $AIRTABLE_BASE_ID --flatten --output generated/zod-schemas-flat.ts",
+    "generate:multi-ts": "node ../dist/cli/index.js --base-id $AIRTABLE_BASE_ID --typescript-only --separate-files --output generated/types/",
+    "generate:multi-zod": "node ../dist/cli/index.js --base-id $AIRTABLE_BASE_ID --separate-files --output generated/schemas/",
     "generate:help": "node ../dist/cli/index.js --help",
     "generate:version": "node ../dist/cli/index.js --version",
     "test:basic": "node src/test-basic.js",
     "test:flatten": "node src/test-flatten.js",
     "test:zod": "node src/test-zod-format.js",
     "test:multi": "node src/test-separate-files.js",
-    "test:types": "npx tsc --noEmit src/test-types.ts",
+    "test:types": "tsc --noEmit src/test-types.ts",
     "test:integration": "node src/test-real-airtable.js",
     "demo:zod": "node example-zod-usage.js",
     "demo:multi": "node example-multi-file-usage.js",
-    "dev": "npm run generate && npm run test:basic"
+    "dev": "pnpm run generate && pnpm run test:basic"
   },
   "dependencies": {
     "airtable": "^0.12.2",
-    "zod": "^3.23.8"
+    "zod": "^4.4.3",
+    "zod-v3": "npm:zod@^3.25.76"
   },
   "devDependencies": {
-    "@types/node": "^20.11.24",
-    "typescript": "^5.4.2"
+    "@types/node": "^24.13.3",
+    "typescript": "^5.9.3"
   }
 }

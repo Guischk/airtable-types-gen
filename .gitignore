@@ -107,9 +107,13 @@ Thumbs.db
 # Yarn Integrity file
 .yarn-integrity
 
-# npm package lock
+# Lockfiles from other package managers. pnpm is the only supported one and
+# pnpm-lock.yaml is committed on purpose: a pinned dependency graph is what
+# makes a compromised transitive release detectable in review.
 package-lock.json
 yarn.lock
+bun.lock
+bun.lockb
 
 # Others
 *.tgz

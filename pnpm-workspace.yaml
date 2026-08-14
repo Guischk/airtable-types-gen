@@ -1,0 +1,13 @@
+packages:
+  - '.'
+  - 'test-local'
+
+# Dependency install/postinstall scripts are blocked by default. Every entry
+# below is a deliberate, reviewable exception — anything not listed cannot
+# execute code at install time.
+#
+# esbuild: dev-only (pulled in by vitest/vite). Its postinstall links the
+# platform binary shipped in @esbuild/linux-x64 & co; vitest cannot start
+# without it. Never part of the published package.
+allowBuilds:
+  esbuild: true

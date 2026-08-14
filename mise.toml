@@ -1,0 +1,5 @@
+# Pinned to the current Node LTS line (24 "Krypton") and the pnpm major the
+# lockfile was produced with.
+[tools]
+node = "24"
+pnpm = "11"
