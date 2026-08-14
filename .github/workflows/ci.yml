@@ -1,0 +1,146 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+# Cancel superseded runs on the same ref.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Node ${{ matrix.node }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Both LTS lines `engines` allows: 22 "Jod" (maintenance) and 24
+        # "Krypton" (active). Node 20 reached EOL in March 2026.
+        node: ['22', '24']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: pnpm
+
+      # --frozen-lockfile skips resolution entirely, so a lockfile that has
+      # drifted from package.json fails here instead of quietly installing
+      # something nobody reviewed.
+      - run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm exec eslint src
+
+      - name: Type-check
+        run: pnpm exec tsc --noEmit
+
+      - name: Test
+        run: pnpm test
+
+  zod3:
+    name: Zod 3 resolution
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+
+      # The suite normally runs against Zod 4. `tests/integration/zod-compat`
+      # evaluates the *emitted expressions* on both majors, but only this job
+      # type-checks src/ and the generated files against Zod 3.
+      #
+      # The override has to reach the whole workspace: test-local resolving a
+      # different Zod major than the root puts two copies in one type-check and
+      # every generated schema fails to match the runtime helpers' signatures.
+      # The override goes in pnpm-workspace.yaml: pnpm 11 no longer reads the
+      # `pnpm` field in package.json and ignores overrides declared there.
+      - name: Pin Zod 3 across the workspace
+        run: |
+          printf '\noverrides:\n  zod: 3.25.76\n' >> pnpm-workspace.yaml
+          pnpm install --no-frozen-lockfile
+
+      - name: Confirm the override took effect
+        run: |
+          root=$(node -p "require('./node_modules/zod/package.json').version")
+          local=$(node -p "require('./test-local/node_modules/zod/package.json').version")
+          echo "root=$root test-local=$local"
+          case "$root" in 3.*) ;; *) echo "::error::root Zod is $root, expected 3.x"; exit 1 ;; esac
+          case "$local" in 3.*) ;; *) echo "::error::test-local Zod is $local, expected 3.x"; exit 1 ;; esac
+
+      - name: Type-check against Zod 3
+        run: pnpm exec tsc --noEmit
+
+      - name: Test against Zod 3
+        run: pnpm test
+
+  package:
+    name: Package contents
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm run build
+
+      # The published tarball must carry dist/ and bin/ and nothing else — no
+      # sources, no tests, no env files.
+      - name: Check the tarball ships only build output
+        run: |
+          pnpm pack --pack-destination /tmp
+          tarball=$(ls /tmp/airtable-types-gen-*.tgz)
+          echo "Inspecting $tarball"
+          tar tzf "$tarball" | sed 's|^package/||' | sort > /tmp/contents.txt
+          cat /tmp/contents.txt
+
+          if grep -qE '^(src/|tests/|test-local/|\.env)' /tmp/contents.txt; then
+            echo "::error::tarball contains files that must not be published"
+            exit 1
+          fi
+          for required in bin/airtable-types-gen dist/index.js dist/index.d.ts package.json; do
+            grep -qx "$required" /tmp/contents.txt || {
+              echo "::error::tarball is missing $required"; exit 1; }
+          done
+
+      # A consumer resolving types through the "exports" map is the case that
+      # silently broke before: "types" was listed after "import"/"require", so
+      # the condition never applied and no types resolved at all.
+      - name: Check the exports map resolves types
+        run: |
+          node -e "
+            const { exports: e } = require('./package.json');
+            for (const [entry, conditions] of Object.entries(e)) {
+              if (typeof conditions === 'string') continue;
+              const keys = Object.keys(conditions);
+              if (keys[0] !== 'types') {
+                console.error(\`::error::exports['\${entry}'] lists '\${keys[0]}' before 'types'; the types condition will never apply\`);
+                process.exit(1);
+              }
+            }
+            console.log('exports map ok');
+          "

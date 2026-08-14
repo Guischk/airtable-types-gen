@@ -87,7 +87,6 @@ public
 *.sublime-project
 CLAUDE.md
 .claude/
-.github/
 
 # Mac system files
 .DS_Store
