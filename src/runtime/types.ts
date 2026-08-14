@@ -24,12 +24,24 @@ export type Writable<T> = {
 };
 
 /**
- * Extract only the writable (non-readonly) properties from a type
- * Useful for create operations where computed fields should be excluded
+ * Extract only the writable (non-readonly) properties from a type.
+ * Useful for create operations where computed fields should be excluded.
+ *
+ * The readonly-ness of a property is not observable from its value type —
+ * `T[P] extends Readonly<T[P]>` is true for every P, which is why the previous
+ * implementation always evaluated to `{}`. Comparing the property through two
+ * otherwise-identical mapped types, one with the modifier stripped, is the only
+ * way to detect it.
  */
 export type WritableOnly<T> = {
-  [P in keyof T as T[P] extends Readonly<T[P]> ? never : P]: T[P];
+  [P in keyof T as IsReadonlyKey<T, P> extends true ? never : P]: T[P];
 };
+
+type IsReadonlyKey<T, P extends keyof T> =
+  Equals<{ [K in P]: T[K] }, { -readonly [K in P]: T[K] }> extends true ? false : true;
+
+type Equals<X, Y> =
+  (<G>() => G extends X ? 1 : 2) extends <G>() => G extends Y ? 1 : 2 ? true : false;
 
 /**
  * Generic type for Airtable API responses

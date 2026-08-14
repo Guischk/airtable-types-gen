@@ -76,7 +76,7 @@ export const executeGenerate = async (options: CliOptions): Promise<void> => {
         const schemas = filteredSchema.tables
           .map((table) => generateTableZodSchema(table, flatten, { includeImport: false }))
           .join('\n\n');
-        const utilityTypes = generateUtilityZodTypes(filteredSchema);
+        const utilityTypes = generateUtilityZodTypes(filteredSchema, { flatten });
         content = imports + schemas + utilityTypes;
       } else {
         // Generate TypeScript types (existing logic)

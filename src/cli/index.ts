@@ -4,12 +4,23 @@
 import { config } from 'dotenv';
 config({ path: '.env' });
 
-import { parseArguments, printHelp, printVersion } from './options.js';
+import { parseArguments, printHelp, printVersion, UnknownOptionError } from './options.js';
 import { executeGenerate } from './commands.js';
 
 const main = async (): Promise<void> => {
   const args = process.argv.slice(2);
-  const options = parseArguments(args);
+
+  let options;
+  try {
+    options = parseArguments(args);
+  } catch (error) {
+    if (error instanceof UnknownOptionError) {
+      console.error(`Error: ${error.message}`);
+      console.error('Run `airtable-types-gen --help` to see the available options.');
+      process.exit(1);
+    }
+    throw error;
+  }
 
   // Handle help and version flags
   if (options.help) {

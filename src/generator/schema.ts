@@ -29,10 +29,10 @@ export const isAlwaysPresentComputed = (field: AirtableField): boolean => {
     return true;
   }
 
+  // Exact match only. A substring match here made every field whose name merely
+  // contains "id" — Paid, Video, Valid — non-optional in the generated output.
   const fieldNameLower = field.name.toLowerCase();
-  return ALWAYS_PRESENT_FIELD_NAMES.some(
-    (name) => fieldNameLower === name || fieldNameLower.includes(name)
-  );
+  return ALWAYS_PRESENT_FIELD_NAMES.some((name) => fieldNameLower === name);
 };
 
 export const enrichFieldMetadata = (field: AirtableField): AirtableField => {
@@ -49,7 +49,9 @@ export const fetchBaseSchema = async (
   token: string
 ): Promise<AirtableBaseSchema> => {
   try {
-    console.log(`[Schema] Fetching base schema for ${baseId}`);
+    // Progress goes to stderr: stdout carries the generated module when the CLI
+    // is used as `airtable-types-gen > schemas.ts`.
+    console.error(`[Schema] Fetching base schema for ${baseId}`);
 
     const response = await fetch(`https://api.airtable.com/v0/meta/bases/${baseId}/tables`, {
       headers: {
@@ -64,7 +66,7 @@ export const fetchBaseSchema = async (
 
     const data: unknown = await response.json();
 
-    console.log(
+    console.error(
       `[Schema] Successfully fetched schema for ${(data as any)?.tables?.length || 0} tables`
     );
 
@@ -100,13 +102,20 @@ export const mapAirtableTypeToTSEnhanced = (field: AirtableField): TypeMappingRe
       type = strictType = 'number';
       break;
 
+    case 'duration':
+      type = strictType = 'number';
+      description = 'Duration in seconds';
+      break;
+
     case 'checkbox':
       type = strictType = 'boolean';
       break;
 
     case 'singleSelect':
       if (field.options?.choices) {
-        const choices = field.options.choices.map((choice: any) => `"${choice.name}"`).join(' | ');
+        const choices = field.options.choices
+          .map((choice: any) => JSON.stringify(choice.name))
+          .join(' | ');
         type = strictType = choices || 'string';
       } else {
         type = strictType = 'string';
@@ -115,7 +124,9 @@ export const mapAirtableTypeToTSEnhanced = (field: AirtableField): TypeMappingRe
 
     case 'multipleSelects':
       if (field.options?.choices) {
-        const choices = field.options.choices.map((choice: any) => `"${choice.name}"`).join(' | ');
+        const choices = field.options.choices
+          .map((choice: any) => JSON.stringify(choice.name))
+          .join(' | ');
         type = strictType = `Array<${choices || 'string'}>`;
       } else {
         type = strictType = 'string[]';
@@ -188,8 +199,14 @@ export const mapAirtableTypeToTSEnhanced = (field: AirtableField): TypeMappingRe
 
     case 'createdBy':
     case 'lastModifiedBy':
+    case 'singleCollaborator':
       type = strictType = '{ id: string; email: string; name: string }';
       description = readonly ? '🔒 Computed by Airtable - user information' : 'User information';
+      break;
+
+    case 'multipleCollaborators':
+      type = strictType = 'Array<{ id: string; email: string; name: string }>';
+      description = readonly ? '🔒 Computed by Airtable - collaborators' : 'Collaborators';
       break;
 
     case 'barcode':
@@ -239,7 +256,18 @@ export const mapAirtableTypeToTSEnhanced = (field: AirtableField): TypeMappingRe
   };
 };
 
-export const generateInterfaceName = (tableName: string): string => {
+/**
+ * Turn an Airtable table name into a PascalCase TypeScript identifier.
+ *
+ * Airtable accepts names TypeScript cannot: `2024 Sales` would yield an
+ * identifier starting with a digit, and an emoji-only name would yield an empty
+ * one. Both used to emit source that does not parse, so they are corrected here.
+ *
+ * Note: names that differ only by case or punctuation (`users` vs `Users`) still
+ * collapse to the same identifier. That is a known limitation, not something
+ * this function can resolve alone — it has no view of the other tables.
+ */
+export const toPascalCaseIdentifier = (tableName: string): string => {
   const cleanName = tableName
     // Replace special characters and spaces with underscores
     .replace(/[^a-zA-Z0-9\s-_]/g, '')
@@ -249,8 +277,16 @@ export const generateInterfaceName = (tableName: string): string => {
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
     .join('');
 
-  return cleanName + 'Record';
+  if (cleanName.length === 0) {
+    return 'Table';
+  }
+
+  // A leading digit is legal in an Airtable name but not in a TS identifier.
+  return /^[0-9]/.test(cleanName) ? `Table${cleanName}` : cleanName;
 };
+
+export const generateInterfaceName = (tableName: string): string =>
+  `${toPascalCaseIdentifier(tableName)}Record`;
 
 export const generatePropertyName = (fieldName: string): string => {
   return fieldName;

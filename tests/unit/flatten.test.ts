@@ -44,9 +44,7 @@ describe('flattenRecord', () => {
   it('should handle complex field values', () => {
     const mockRecord = createMockRecord('rec789', {
       'Multi Select': ['Option 1', 'Option 2'],
-      'Attachments': [
-        { id: 'att1', url: 'https://example.com/file1.jpg', filename: 'file1.jpg' }
-      ],
+      Attachments: [{ id: 'att1', url: 'https://example.com/file1.jpg', filename: 'file1.jpg' }],
       'Linked Records': ['recABC', 'recDEF'],
     });
 
@@ -55,9 +53,7 @@ describe('flattenRecord', () => {
     expect(result).toEqual({
       record_id: 'rec789',
       'Multi Select': ['Option 1', 'Option 2'],
-      'Attachments': [
-        { id: 'att1', url: 'https://example.com/file1.jpg', filename: 'file1.jpg' }
-      ],
+      Attachments: [{ id: 'att1', url: 'https://example.com/file1.jpg', filename: 'file1.jpg' }],
       'Linked Records': ['recABC', 'recDEF'],
     });
   });

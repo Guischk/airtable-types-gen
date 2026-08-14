@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseArguments } from '../../src/cli/options';
+import { parseArguments, UnknownOptionError } from '../../src/cli/options';
 
 describe('CLI options parsing', () => {
   it('should parse base-id option', () => {
@@ -64,17 +64,20 @@ describe('CLI options parsing', () => {
 
   it('should parse complex command', () => {
     const options = parseArguments([
-      '--base-id', 'appTest123',
-      '--output', 'src/types.ts',
+      '--base-id',
+      'appTest123',
+      '--output',
+      'src/types.ts',
       '--flatten',
-      '--tables', 'Users,Projects'
+      '--tables',
+      'Users,Projects',
     ]);
 
     expect(options).toEqual({
       baseId: 'appTest123',
       output: 'src/types.ts',
       flatten: true,
-      tables: ['Users', 'Projects']
+      tables: ['Users', 'Projects'],
     });
   });
 
@@ -83,11 +86,17 @@ describe('CLI options parsing', () => {
     expect(options).toEqual({});
   });
 
-  it('should ignore invalid options', () => {
-    const options = parseArguments(['--invalid', 'value', '--base-id', 'appTest']);
-    expect(options).toEqual({
-      baseId: 'appTest'
-    });
+  it('should reject unknown options instead of silently dropping them', () => {
+    expect(() => parseArguments(['--invalid', 'value', '--base-id', 'appTest'])).toThrow(
+      UnknownOptionError
+    );
+    expect(() => parseArguments(['--format', 'zod'])).toThrow('Unknown option: --format');
+  });
+
+  it('should let --native override an earlier --flatten', () => {
+    expect(parseArguments(['--flatten', '--native']).flatten).toBe(false);
+    expect(parseArguments(['--flatten']).flatten).toBe(true);
+    expect(parseArguments(['--no-flatten']).flatten).toBe(false);
   });
 
   it('should handle tables with spaces', () => {

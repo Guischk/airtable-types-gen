@@ -1,5 +1,5 @@
-import { z } from 'zod';
 import { AirtableBaseSchema, AirtableTable } from '../types.js';
+import { describe, literal, propertyKey, sanitizeComment } from './emit.js';
 import { enrichFieldMetadata, isAlwaysPresentComputed } from './schema.js';
 import {
   mapAirtableTypeToZod,
@@ -7,6 +7,34 @@ import {
   generateSchemaName,
   generateTypeName,
 } from './zod-schema.js';
+
+/**
+ * Emit the `  key: z.…,` entry (plus its JSDoc line) for one field.
+ * Shared by the flattened and native shapes so the two cannot drift.
+ */
+const emitFieldEntry = (field: AirtableTable['fields'][number], propertyName: string): string[] => {
+  const lines: string[] = [];
+  const zodMapping = mapAirtableTypeToZod(field);
+  const enrichedField = enrichFieldMetadata(field);
+  const isOptional = enrichedField.isReadonly && !isAlwaysPresentComputed(field);
+
+  const comment = describe(field.description, zodMapping.description);
+  if (comment) {
+    lines.push(`  /** ${comment} */`);
+  }
+
+  let expression = zodMapping.expression;
+  // Applied here rather than in the mapping so Zod and TypeScript output agree.
+  if (enrichedField.isReadonly) {
+    expression += '.readonly()';
+  }
+  if (isOptional) {
+    expression += '.optional()';
+  }
+
+  lines.push(`  ${propertyKey(propertyName)}: ${expression},`);
+  return lines;
+};
 
 export const generateTableZodSchema = (
   table: AirtableTable,
@@ -26,8 +54,10 @@ export const generateTableZodSchema = (
 
   // Add schema header comment
   lines.push('/**');
-  lines.push(` * Zod schema for table "${table.name}"`);
-  lines.push(` * @description ${table.description || `Table ${table.name} from Airtable`}`);
+  lines.push(` * Zod schema for table "${sanitizeComment(table.name)}"`);
+  lines.push(
+    ` * @description ${sanitizeComment(table.description || `Table ${table.name} from Airtable`)}`
+  );
   lines.push(' */');
 
   if (flatten) {
@@ -58,51 +88,9 @@ export const generateTableZodSchema = (
       }
       propertyNames.add(propertyName);
 
-      const zodMapping = mapAirtableTypeToZod(field);
-      const enrichedField = enrichFieldMetadata(field);
-      const isOptional = enrichedField.isReadonly && !isAlwaysPresentComputed(field);
-
       // Add empty line before property for readability
       lines.push('');
-
-      // Add comment if we have descriptions
-      const descriptions = [];
-      if (field.description) {
-        const cleanDesc = field.description
-          .replace(/\\n/g, ' ')
-          .replace(/\n/g, ' ')
-          .replace(/\\r/g, ' ')
-          .replace(/\r/g, ' ');
-        descriptions.push(cleanDesc);
-      }
-      if (zodMapping.description) {
-        const cleanDesc = zodMapping.description
-          .replace(/\\n/g, ' ')
-          .replace(/\n/g, ' ')
-          .replace(/\\r/g, ' ')
-          .replace(/\r/g, ' ');
-        descriptions.push(cleanDesc);
-      }
-
-      if (descriptions.length > 0) {
-        lines.push(`  /** ${descriptions.join(' - ')} */`);
-      }
-
-      // Add property
-      const needsBrackets = /[^a-zA-Z0-9_$]/.test(propertyName);
-      const propertyKey = needsBrackets ? JSON.stringify(propertyName) : propertyName;
-
-      // Convert Zod schema to string representation
-      let schemaStr = generateZodSchemaString(zodMapping.schema);
-      // Apply readonly modifier for computed fields
-      if (enrichedField.isReadonly) {
-        schemaStr += '.readonly()';
-      }
-      // Apply same optionality logic as TypeScript generation
-      if (isOptional) {
-        schemaStr += '.optional()';
-      }
-      lines.push(`  ${propertyKey}: ${schemaStr},`);
+      lines.push(...emitFieldEntry(field, propertyName));
     });
 
     lines.push('});');
@@ -130,53 +118,11 @@ export const generateTableZodSchema = (
       }
       propertyNames.add(propertyName);
 
-      const zodMapping = mapAirtableTypeToZod(field);
-      const enrichedField = enrichFieldMetadata(field);
-      const isOptional = enrichedField.isReadonly && !isAlwaysPresentComputed(field);
-
       // Add empty line before property if we have previous fields
       if (index > 0) {
         lines.push('');
       }
-
-      // Add comment if we have descriptions
-      const descriptions = [];
-      if (field.description) {
-        const cleanDesc = field.description
-          .replace(/\\n/g, ' ')
-          .replace(/\n/g, ' ')
-          .replace(/\\r/g, ' ')
-          .replace(/\r/g, ' ');
-        descriptions.push(cleanDesc);
-      }
-      if (zodMapping.description) {
-        const cleanDesc = zodMapping.description
-          .replace(/\\n/g, ' ')
-          .replace(/\n/g, ' ')
-          .replace(/\\r/g, ' ')
-          .replace(/\r/g, ' ');
-        descriptions.push(cleanDesc);
-      }
-
-      if (descriptions.length > 0) {
-        lines.push(`  /** ${descriptions.join(' - ')} */`);
-      }
-
-      // Add property
-      const needsBrackets = /[^a-zA-Z0-9_$]/.test(propertyName);
-      const propertyKey = needsBrackets ? JSON.stringify(propertyName) : propertyName;
-
-      // Convert Zod schema to string representation
-      let schemaStr = generateZodSchemaString(zodMapping.schema);
-      // Apply readonly modifier for computed fields
-      if (enrichedField.isReadonly) {
-        schemaStr += '.readonly()';
-      }
-      // Apply same optionality logic as TypeScript generation
-      if (isOptional) {
-        schemaStr += '.optional()';
-      }
-      lines.push(`  ${propertyKey}: ${schemaStr},`);
+      lines.push(...emitFieldEntry(field, propertyName));
     });
 
     lines.push('});');
@@ -205,108 +151,25 @@ export const generateTableZodSchema = (
   return lines.join('\n');
 };
 
-const generateZodSchemaString = (schema: z.ZodType<any>): string => {
-  // This is a simplified approach to convert Zod schemas to string
-  // In a real implementation, you might need a more sophisticated approach
-
-  if (schema instanceof z.ZodString) {
-    let str = 'z.string()';
-    const checks = (schema as any)._def.checks || [];
-    for (const check of checks) {
-      switch (check.kind) {
-        case 'email':
-          str += `.email(${JSON.stringify(check.message || 'Invalid email format')})`;
-          break;
-        case 'url':
-          str += `.url(${JSON.stringify(check.message || 'Invalid URL format')})`;
-          break;
-        case 'regex':
-          str += `.regex(${check.regex}, ${JSON.stringify(check.message || 'Invalid format')})`;
-          break;
-        case 'datetime':
-          str += `.datetime(${JSON.stringify(check.message || 'Invalid ISO datetime format')})`;
-          break;
-      }
-    }
-    return str;
-  }
-
-  if (schema instanceof z.ZodNumber) {
-    let str = 'z.number()';
-    const checks = (schema as any)._def.checks || [];
-    for (const check of checks) {
-      switch (check.kind) {
-        case 'int':
-          str += '.int()';
-          break;
-        case 'min':
-          str += `.min(${check.value})`;
-          break;
-        case 'max':
-          str += `.max(${check.value})`;
-          break;
-      }
-    }
-    return str;
-  }
-
-  if (schema instanceof z.ZodBoolean) {
-    return 'z.boolean()';
-  }
-
-  if (schema instanceof z.ZodEnum) {
-    const values = (schema as any)._def.values;
-    const enumValues = values.map((v: string) => JSON.stringify(v)).join(', ');
-    return `z.enum([${enumValues}])`;
-  }
-
-  if (schema instanceof z.ZodArray) {
-    const elementType = generateZodSchemaString((schema as any)._def.type);
-    return `z.array(${elementType})`;
-  }
-
-  if (schema instanceof z.ZodObject) {
-    const shape = (schema as any)._def.shape();
-    const properties: string[] = [];
-
-    for (const [key, value] of Object.entries(shape)) {
-      const propSchema = generateZodSchemaString(value as z.ZodType<any>);
-      properties.push(`${key}: ${propSchema}`);
-    }
-
-    return `z.object({ ${properties.join(', ')} })`;
-  }
-
-  if (schema instanceof z.ZodUnion) {
-    const options = (schema as any)._def.options;
-    const unionTypes = options.map((option: z.ZodType<any>) => generateZodSchemaString(option));
-    return `z.union([${unionTypes.join(', ')}])`;
-  }
-
-  if (schema instanceof z.ZodOptional) {
-    const innerType = generateZodSchemaString((schema as any)._def.innerType);
-    return `${innerType}.optional()`;
-  }
-
-  // Fallback for complex types
-  return 'z.any()';
-};
-
 export const generateUtilityZodTypes = (
   schema: AirtableBaseSchema,
   options?: { flatten?: boolean }
 ): string => {
   const flatten = options?.flatten ?? false;
-  const tableNames = schema.tables.map((table) => JSON.stringify(table.name)).join(' | ');
+  const tableNames = schema.tables.map((table) => literal(table.name)).join(' | ');
 
-  const tableNamesArray = schema.tables.map((table) => JSON.stringify(table.name)).join(', ');
+  const tableNamesArray = schema.tables.map((table) => literal(table.name)).join(', ');
 
   const schemaExports = schema.tables
     .map((table) => {
       const schemaName = generateSchemaName(table.name);
       const typeName = generateTypeName(table.name);
-      return `  ${JSON.stringify(table.name)}: { schema: typeof ${schemaName}, type: ${typeName} };`;
+      return `  ${literal(table.name)}: { schema: typeof ${schemaName}, type: ${typeName} };`;
     })
+    .join('\n');
+
+  const registryEntries = schema.tables
+    .map((table) => `  ${literal(table.name)}: ${generateSchemaName(table.name)},`)
     .join('\n');
 
   // Always expose readonly field lists for each table (useful in both modes)
@@ -315,7 +178,7 @@ export const generateUtilityZodTypes = (
       const typeBase = generateSchemaName(table.name).replace(/Schema$/, '');
       const readonlyFields = table.fields
         .filter((f) => enrichFieldMetadata(f).isReadonly)
-        .map((f) => JSON.stringify(f.name))
+        .map((f) => literal(f.name))
         .join(', ');
       return `// Readonly fields for ${table.name}\nexport const ${typeBase}ReadonlyFields = [${readonlyFields}] as const;`;
     })
@@ -364,15 +227,19 @@ export type GetTableSchema<T extends AirtableTableName> = AirtableTableSchemas[T
 export type GetTableType<T extends AirtableTableName> = AirtableTableSchemas[T]['type'];
 
 /**
- * Validation helper function
+ * Runtime registry of every generated schema, keyed by table name.
  */
-export const validateRecord = <T extends AirtableTableName>(
+export const AIRTABLE_SCHEMAS = {
+${registryEntries}
+} as const;
+
+/**
+ * Validate an unknown payload against the schema of a given table.
+ */
+export const validateTableRecord = <T extends AirtableTableName>(
   tableName: T,
   data: unknown
-): GetTableType<T> => {
-  // This would need to be implemented with actual schema lookup
-  throw new Error('Schema validation not implemented yet');
-};
+): GetTableType<T> => AIRTABLE_SCHEMAS[tableName].parse(data) as GetTableType<T>;
 ${readonlyArraysBlock ? `\n${readonlyArraysBlock}\n` : ''}
 ${helpersBlock ? `\n${helpersBlock}\n` : ''}
 `;

@@ -56,9 +56,8 @@ describe('Generated files compile in test-local for key option combinations', ()
 
   it('single-file Zod (no flatten)', async () => {
     const { fetchBaseSchema } = await import('../../src/generator/schema.js');
-    const { generateTableZodSchema, generateUtilityZodTypes } = await import(
-      '../../src/generator/zod-generator.js'
-    );
+    const { generateTableZodSchema, generateUtilityZodTypes } =
+      await import('../../src/generator/zod-generator.js');
     const viAny: any = vi;
     viAny.stubGlobal('fetch', async () => ({ ok: true, json: async () => mockAirtableSchema }));
 
@@ -73,17 +72,16 @@ describe('Generated files compile in test-local for key option combinations', ()
     const tsc = await runTsc();
     expect(tsc.code).toBe(0);
 
-  // Sanity check: inferred type uses Readonly<z.infer<...>> and readonly fields are marked
-  const content = await fs.readFile(path.join(genDir, 'zod-schemas.ts'), 'utf8');
-  expect(content).toMatch(/export type \w+Record = z\.infer/);
-  expect(content).toContain('.readonly()');
+    // Sanity check: inferred type uses Readonly<z.infer<...>> and readonly fields are marked
+    const content = await fs.readFile(path.join(genDir, 'zod-schemas.ts'), 'utf8');
+    expect(content).toMatch(/export type \w+Record = z\.infer/);
+    expect(content).toContain('.readonly()');
   });
 
   it('single-file Zod (flatten)', async () => {
     const { fetchBaseSchema } = await import('../../src/generator/schema.js');
-    const { generateTableZodSchema, generateUtilityZodTypes } = await import(
-      '../../src/generator/zod-generator.js'
-    );
+    const { generateTableZodSchema, generateUtilityZodTypes } =
+      await import('../../src/generator/zod-generator.js');
     const viAny: any = vi;
     viAny.stubGlobal('fetch', async () => ({ ok: true, json: async () => mockAirtableSchema }));
 
@@ -98,10 +96,10 @@ describe('Generated files compile in test-local for key option combinations', ()
     const tsc = await runTsc();
     expect(tsc.code).toBe(0);
 
-  const content = await fs.readFile(path.join(genDir, 'zod-schemas-flat.ts'), 'utf8');
-  // Should re-export flattenRecord and include creation/update helpers
-  expect(content).toContain("export { flattenRecord } from 'airtable-types-gen/runtime'");
-  expect(content).toMatch(/ReadonlyFields|CreationSchema|UpdateSchema/);
+    const content = await fs.readFile(path.join(genDir, 'zod-schemas-flat.ts'), 'utf8');
+    // Should re-export flattenRecord and include creation/update helpers
+    expect(content).toContain("export { flattenRecord } from 'airtable-types-gen/runtime'");
+    expect(content).toMatch(/ReadonlyFields|CreationSchema|UpdateSchema/);
   });
 
   it('multi-file TypeScript (no flatten)', async () => {
@@ -163,11 +161,11 @@ describe('Generated files compile in test-local for key option combinations', ()
     const tsc = await runTsc();
     expect(tsc.code).toBe(0);
 
-  const indexContent = await fs.readFile(path.join(outDir, 'index.ts'), 'utf8');
-  // Index should import z for z.infer usage
-  expect(indexContent).toContain("import { z } from 'zod'");
-  // And expose creation/update helpers
-  expect(indexContent).toMatch(/CreationSchema|UpdateSchema/);
+    const indexContent = await fs.readFile(path.join(outDir, 'index.ts'), 'utf8');
+    // Index should import z for z.infer usage
+    expect(indexContent).toContain("import { z } from 'zod'");
+    // And expose creation/update helpers
+    expect(indexContent).toMatch(/CreationSchema|UpdateSchema/);
   });
 
   it('multi-file Zod (no flatten)', async () => {
@@ -190,9 +188,9 @@ describe('Generated files compile in test-local for key option combinations', ()
     const tsc = await runTsc();
     expect(tsc.code).toBe(0);
 
-  const indexContent = await fs.readFile(path.join(outDir, 'index.ts'), 'utf8');
-  // Index should import z for z.infer usage
-  expect(indexContent).toContain("import { z } from 'zod'");
+    const indexContent = await fs.readFile(path.join(outDir, 'index.ts'), 'utf8');
+    // Index should import z for z.infer usage
+    expect(indexContent).toContain("import { z } from 'zod'");
   });
 
   it('single-file TS with table filter and compiles', async () => {

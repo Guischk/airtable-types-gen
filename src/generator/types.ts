@@ -1,4 +1,5 @@
 import { AirtableBaseSchema, AirtableTable, GenerateOptions, GenerateResult } from '../types.js';
+import { bracketedKey, describe, literal, sanitizeComment } from './emit.js';
 import {
   fetchBaseSchema,
   mapAirtableTypeToTSEnhanced,
@@ -13,9 +14,9 @@ export const generateTableInterface = (table: AirtableTable, flatten: boolean = 
 
   // Add interface header
   interfaceLines.push('/**');
-  interfaceLines.push(` * Interface generated for table "${table.name}"`);
+  interfaceLines.push(` * Interface generated for table "${sanitizeComment(table.name)}"`);
   interfaceLines.push(
-    ` * @description ${table.description || `Table ${table.name} from Airtable`}`
+    ` * @description ${sanitizeComment(table.description || `Table ${table.name} from Airtable`)}`
   );
   interfaceLines.push(' */');
 
@@ -28,7 +29,7 @@ export const generateTableInterface = (table: AirtableTable, flatten: boolean = 
     const propertyNames = new Set<string>();
     propertyNames.add('record_id');
 
-    table.fields.forEach((field) => {
+    table.fields.forEach((field, index) => {
       let propertyName = generatePropertyName(field.name);
 
       // Handle property name conflicts
@@ -53,40 +54,23 @@ export const generateTableInterface = (table: AirtableTable, flatten: boolean = 
       const isOptional = isReadonly && !isAlwaysPresentComputed(field);
       const optional = isOptional ? '?' : '';
 
-      const descriptions = [];
-      if (field.description) {
-        const cleanDesc = field.description
-          .replace(/\\n/g, ' ')
-          .replace(/\n/g, ' ')
-          .replace(/\\r/g, ' ')
-          .replace(/\r/g, ' ');
-        descriptions.push(cleanDesc);
-      }
-      if (typeMapping.description) {
-        const cleanDesc = typeMapping.description
-          .replace(/\\n/g, ' ')
-          .replace(/\n/g, ' ')
-          .replace(/\\r/g, ' ')
-          .replace(/\r/g, ' ');
-        descriptions.push(cleanDesc);
-      }
+      const comment = describe(field.description, typeMapping.description);
 
       // Add empty line before property if we had previous properties
-      if (interfaceLines.length > 7) {
+      if (index > 0) {
         interfaceLines.push('');
       }
 
       // Add comment if we have descriptions
-      if (descriptions.length > 0) {
-        interfaceLines.push(`  /** ${descriptions.join(' - ')} */`);
+      if (comment) {
+        interfaceLines.push(`  /** ${comment} */`);
       }
 
       // Add property
-      const needsBrackets = /[^a-zA-Z0-9_$]/.test(propertyName);
-      const propertyKey = needsBrackets ? `["${propertyName.replace(/"/g, '\\"')}"]` : propertyName;
-
       const readonlyModifier = isReadonly ? 'readonly ' : '';
-      interfaceLines.push(`  ${readonlyModifier}${propertyKey}${optional}: ${propertyType};`);
+      interfaceLines.push(
+        `  ${readonlyModifier}${bracketedKey(propertyName)}${optional}: ${propertyType};`
+      );
     });
 
     interfaceLines.push('}');
@@ -120,23 +104,7 @@ export const generateTableInterface = (table: AirtableTable, flatten: boolean = 
       const isOptional = isReadonly && !isAlwaysPresentComputed(field);
       const optional = isOptional ? '?' : '';
 
-      const descriptions = [];
-      if (field.description) {
-        const cleanDesc = field.description
-          .replace(/\\n/g, ' ')
-          .replace(/\n/g, ' ')
-          .replace(/\\r/g, ' ')
-          .replace(/\r/g, ' ');
-        descriptions.push(cleanDesc);
-      }
-      if (typeMapping.description) {
-        const cleanDesc = typeMapping.description
-          .replace(/\\n/g, ' ')
-          .replace(/\n/g, ' ')
-          .replace(/\\r/g, ' ')
-          .replace(/\r/g, ' ');
-        descriptions.push(cleanDesc);
-      }
+      const comment = describe(field.description, typeMapping.description);
 
       // Add empty line before property if we have previous fields
       if (index > 0) {
@@ -144,16 +112,15 @@ export const generateTableInterface = (table: AirtableTable, flatten: boolean = 
       }
 
       // Add comment if we have descriptions
-      if (descriptions.length > 0) {
-        interfaceLines.push(`  /** ${descriptions.join(' - ')} */`);
+      if (comment) {
+        interfaceLines.push(`  /** ${comment} */`);
       }
 
       // Add property
-      const needsBrackets = /[^a-zA-Z0-9_$]/.test(propertyName);
-      const propertyKey = needsBrackets ? `["${propertyName.replace(/"/g, '\\"')}"]` : propertyName;
-
       const readonlyModifier = isReadonly ? 'readonly ' : '';
-      interfaceLines.push(`  ${readonlyModifier}${propertyKey}${optional}: ${propertyType};`);
+      interfaceLines.push(
+        `  ${readonlyModifier}${bracketedKey(propertyName)}${optional}: ${propertyType};`
+      );
     });
 
     interfaceLines.push('}');
@@ -176,17 +143,13 @@ export const generateTableInterface = (table: AirtableTable, flatten: boolean = 
 };
 
 const generateUtilityTypes = (schema: AirtableBaseSchema, flatten: boolean = false): string => {
-  const tableNames = schema.tables
-    .map((table) => `'${table.name.replace(/'/g, "\\'")}'`)
-    .join(' | ');
+  const tableNames = schema.tables.map((table) => literal(table.name)).join(' | ');
 
   const tableTypesMapping = schema.tables
-    .map((table) => `  '${table.name.replace(/'/g, "\\'")}': ${generateInterfaceName(table.name)};`)
+    .map((table) => `  ${literal(table.name)}: ${generateInterfaceName(table.name)};`)
     .join('\n');
 
-  const tableNamesArray = schema.tables
-    .map((table) => `'${table.name.replace(/'/g, "\\'")}'`)
-    .join(', ');
+  const tableNamesArray = schema.tables.map((table) => literal(table.name)).join(', ');
 
   if (flatten) {
     // Flattened mode utility types
@@ -336,7 +299,7 @@ export const generateAllTypes = (schema: AirtableBaseSchema, flatten: boolean = 
 };
 
 export const generateTypes = async (options: GenerateOptions): Promise<GenerateResult> => {
-  console.log('[Generator] Starting type generation...');
+  console.error('[Generator] Starting type generation...');
 
   const schema = await fetchBaseSchema(options.baseId, options.token);
 
@@ -345,12 +308,12 @@ export const generateTypes = async (options: GenerateOptions): Promise<GenerateR
     filteredSchema = {
       tables: schema.tables.filter((table) => options.tables!.includes(table.name)),
     };
-    console.log(`[Generator] Filtering to ${options.tables.length} specified tables`);
+    console.error(`[Generator] Filtering to ${options.tables.length} specified tables`);
   }
 
   const content = generateAllTypes(filteredSchema, options.flatten || false);
 
-  console.log(`[Generator] Generated types for ${filteredSchema.tables.length} tables`);
+  console.error(`[Generator] Generated types for ${filteredSchema.tables.length} tables`);
 
   return {
     content,

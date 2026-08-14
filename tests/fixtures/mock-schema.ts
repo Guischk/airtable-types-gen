@@ -31,12 +31,8 @@ export const mockTable: AirtableTable = {
       name: 'Role',
       type: 'singleSelect',
       options: {
-        choices: [
-          { name: 'Admin' },
-          { name: 'User' },
-          { name: 'Guest' }
-        ]
-      }
+        choices: [{ name: 'Admin' }, { name: 'User' }, { name: 'Guest' }],
+      },
     },
     {
       id: 'fldCreated',
@@ -52,15 +48,15 @@ export const mockTable: AirtableTable = {
       id: 'fldAiSummary',
       name: 'AI Summary',
       type: 'aiText',
-    }
+    },
   ],
   views: [
     {
       id: 'viwAll',
       name: 'All Users',
-      type: 'grid'
-    }
-  ]
+      type: 'grid',
+    },
+  ],
 };
 
 export const mockSchema: AirtableBaseSchema = {
@@ -82,28 +78,24 @@ export const mockSchema: AirtableBaseSchema = {
           name: 'Status',
           type: 'multipleSelects',
           options: {
-            choices: [
-              { name: 'Planning' },
-              { name: 'In Progress' },
-              { name: 'Completed' }
-            ]
-          }
+            choices: [{ name: 'Planning' }, { name: 'In Progress' }, { name: 'Completed' }],
+          },
         },
         {
           id: 'fldAssignees',
           name: 'Assignees',
           type: 'multipleRecordLinks',
-        }
+        },
       ],
       views: [
         {
           id: 'viwActive',
           name: 'Active Projects',
-          type: 'grid'
-        }
-      ]
-    }
-  ]
+          type: 'grid',
+        },
+      ],
+    },
+  ],
 };
 
 // Keep backward compatibility
