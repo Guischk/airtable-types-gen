@@ -1,27 +1,30 @@
 # Known Issues
 
-## Vitest CJS Deprecation Warning
+## Table names that differ only by case or punctuation
 
-**Issue**: When running tests, you may see this warning:
+Airtable allows two tables to be named `Users` and `users`, or `My Table` and
+`my-table`. Both reduce to the same TypeScript identifier (`UsersRecord`), so
+the generated single-file output declares it twice and will not compile.
 
-```text
-The CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.
-```
+**Impact**: only bases that contain such a pair. Multi-file output is
+unaffected — filenames are disambiguated (`my-table.ts`, `my-table-2.ts`) — but
+the shared identifier in `index.ts` still collides.
 
-**Impact**: This warning does not affect functionality. All tests run successfully and the package works correctly.
+**Workaround**: rename one of the tables, or use `--tables` to generate them
+into separate outputs.
 
-**Root Cause**: This is a known issue with Vitest 1.6.x when used in CommonJS projects. The warning comes from Vite's internal usage, not our code.
-
-**Status**: This is cosmetic only. The package is fully functional and ready for production use.
-
-**Workaround**: If the warning bothers you in your project, you can:
-
-1. Ignore it (recommended - it doesn't affect functionality)
-2. Use `npm run test 2>/dev/null` to hide stderr warnings
-3. Wait for Vitest 2.x which resolves this issue
+**Status**: open. Resolving it properly means suffixing the generated
+identifiers, which would change type names for existing users, so it is
+deferred to a release that can carry that break.
 
 ## Other Issues
 
 None currently known. If you encounter issues, please report them at:
 
 <https://github.com/Guischk/airtable-types-gen/issues>
+
+## Resolved
+
+- **Vitest CJS deprecation warning** — resolved in 0.5.0 by upgrading to
+  Vitest 3. The `The CJS build of Vite's Node API is deprecated` message no
+  longer appears.

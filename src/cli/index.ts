@@ -1,8 +1,11 @@
 #!/usr/bin/env node
 
-// Load .env file if it exists (for convenience)
+// Load .env file if it exists (for convenience).
+// `quiet` suppresses dotenv 17's banner, which it writes to stdout — that would
+// land inside the generated module whenever the CLI is used as
+// `airtable-types-gen > schemas.ts`.
 import { config } from 'dotenv';
-config({ path: '.env' });
+config({ path: '.env', quiet: true });
 
 import { parseArguments, printHelp, printVersion, UnknownOptionError } from './options.js';
 import { executeGenerate } from './commands.js';
