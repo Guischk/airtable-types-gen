@@ -25,9 +25,9 @@ describe('generateTypes integration', () => {
 
     expect(result.content).toContain('export interface UsersRecord');
     expect(result.content).toContain('export interface ProjectsRecord');
-  // TS output aligns with Zod semantics (no readonly/optional markers); verify fields exist
-  expect(result.content).toContain('Created: string;');
-  expect(result.content).toContain('["Auto ID"]: number;');
+    // TS output aligns with Zod semantics (no readonly/optional markers); verify fields exist
+    expect(result.content).toContain('Created: string;');
+    expect(result.content).toContain('["Auto ID"]: number;');
     expect(result.content).toContain('"Admin" | "User" | "Guest"');
     expect(result.content).toContain('Array<"Planning" | "In Progress" | "Completed">');
     expect(result.schema).toEqual(mockAirtableSchema);
@@ -51,7 +51,7 @@ describe('generateTypes integration', () => {
     expect(result.content).toContain('export interface FlattenedRecord');
     expect(result.content).toContain('export { flattenRecord }');
     expect(result.content).toContain('export const AIRTABLE_TABLE_NAMES');
-    expect(result.content).toContain("AIRTABLE_TABLE_NAMES = ['Users', 'Projects'] as const;");
+    expect(result.content).toContain('AIRTABLE_TABLE_NAMES = ["Users", "Projects"] as const;');
     expect(result.schema).toEqual(mockAirtableSchema);
   });
 
@@ -100,20 +100,24 @@ describe('generateTypes integration', () => {
       status: 401,
     });
 
-    await expect(generateTypes({
-      baseId: 'appTest123',
-      token: 'invalid-token',
-    })).rejects.toThrow('HTTP error! status: 401');
+    await expect(
+      generateTypes({
+        baseId: 'appTest123',
+        token: 'invalid-token',
+      })
+    ).rejects.toThrow('HTTP error! status: 401');
   });
 
   it('should handle network errors', async () => {
     // Mock network error
     (fetch as any).mockRejectedValueOnce(new Error('Network error'));
 
-    await expect(generateTypes({
-      baseId: 'appTest123',
-      token: 'test-token',
-    })).rejects.toThrow('Network error');
+    await expect(
+      generateTypes({
+        baseId: 'appTest123',
+        token: 'test-token',
+      })
+    ).rejects.toThrow('Network error');
   });
 
   it('should generate utility types correctly', async () => {
@@ -139,13 +143,13 @@ describe('generateTypes integration', () => {
     expect(result.content).toContain('export type ReadRecord<T extends AirtableTableName>');
 
     // Check table name union
-    expect(result.content).toContain("'Users' | 'Projects'");
+    expect(result.content).toContain('"Users" | "Projects"');
 
     // Check table names array runtime constant
-    expect(result.content).toContain("AIRTABLE_TABLE_NAMES = ['Users', 'Projects'] as const;");
+    expect(result.content).toContain('AIRTABLE_TABLE_NAMES = ["Users", "Projects"] as const;');
 
     // Check table mapping
-    expect(result.content).toContain("'Users': UsersRecord;");
-    expect(result.content).toContain("'Projects': ProjectsRecord;");
+    expect(result.content).toContain('"Users": UsersRecord;');
+    expect(result.content).toContain('"Projects": ProjectsRecord;');
   });
 });

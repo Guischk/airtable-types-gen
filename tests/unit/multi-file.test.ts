@@ -91,7 +91,7 @@ describe('Multi-File Generator', () => {
 
       expect(result).toContain('// Auto-generated index file');
       expect(result).toContain('export type { UsersRecord }');
-      expect(result).toContain("export type AirtableTableName = 'Users'");
+      expect(result).toContain('export type AirtableTableName = "Users"');
       expect(result).toContain('export interface AirtableTableTypes');
       expect(result).toContain('export type GetTableRecord<T extends AirtableTableName>');
     });
@@ -105,7 +105,7 @@ describe('Multi-File Generator', () => {
       expect(result).toContain('export interface AirtableTableSchemas');
       expect(result).toContain('export type GetTableSchema<T extends AirtableTableName>');
       expect(result).toContain('export type GetTableType<T extends AirtableTableName>');
-      expect(result).toContain('export const validateRecord =');
+      expect(result).toContain('export const validateTableRecord =');
     });
 
     it('should handle multiple tables', () => {
@@ -123,7 +123,7 @@ describe('Multi-File Generator', () => {
 
       const result = generateIndexFile(multiTableSchema, { format: 'typescript', flatten: false });
 
-      expect(result).toContain("export type AirtableTableName = 'Users' | 'Projects'");
+      expect(result).toContain('export type AirtableTableName = "Users" | "Projects"');
       expect(result).toContain('export type { UsersRecord }');
       expect(result).toContain('export type { ProjectsRecord }');
     });
@@ -157,9 +157,9 @@ describe('Multi-File Generator', () => {
       expect(result.files).toHaveProperty('index.ts');
       expect(Object.keys(result.files)).toHaveLength(2);
 
-  expect(result.files['users.ts']).toContain('export const UsersSchema =');
-  expect(result.files['users.ts']).toContain('export type UsersRecord =');
-  expect(result.files['index.ts']).toContain('export { UsersSchema, type UsersRecord }');
+      expect(result.files['users.ts']).toContain('export const UsersSchema =');
+      expect(result.files['users.ts']).toContain('export type UsersRecord =');
+      expect(result.files['index.ts']).toContain('export { UsersSchema, type UsersRecord }');
     });
 
     it('should handle multiple tables correctly', async () => {
@@ -277,8 +277,8 @@ describe('Multi-File Generator', () => {
       expect(userContent).toContain('export const UsersSchema =');
       expect(userContent).toContain('record_id: z.string()');
 
-  expect(indexContent).toContain('export { UsersSchema, type UsersRecord }');
-      expect(indexContent).toContain('export const validateRecord =');
+      expect(indexContent).toContain('export { UsersSchema, type UsersRecord }');
+      expect(indexContent).toContain('export const validateTableRecord =');
     });
   });
 });

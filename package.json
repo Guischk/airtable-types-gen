@@ -1,7 +1,7 @@
 {
   "name": "airtable-types-gen",
   "author": "guischk",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "Generate Zod schemas with TypeScript types from Airtable base schemas featuring readonly validation and perfect type alignment",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -10,60 +10,70 @@
   },
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
-      "require": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "require": "./dist/index.js"
     },
     "./runtime": {
+      "types": "./dist/runtime/index.d.ts",
       "import": "./dist/runtime/index.js",
-      "require": "./dist/runtime/index.js",
-      "types": "./dist/runtime/index.d.ts"
-    }
+      "require": "./dist/runtime/index.js"
+    },
+    "./package.json": "./package.json"
   },
   "files": [
     "dist",
     "bin"
   ],
+  "packageManager": "pnpm@11.21.0",
   "scripts": {
-    "build": "tsc",
-    "prebuild": "npm run lint && npm run format",
+    "build": "pnpm run lint && pnpm run format && tsc",
     "dev": "tsc --watch",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
     "test:package": "./test-package.sh",
-    "prepublishOnly": "npm run build",
-    "lint": "eslint src/**/*.ts",
-    "format": "prettier --write src/**/*.ts"
+    "prepublishOnly": "pnpm run build && pnpm run test",
+    "lint": "eslint src",
+    "format": "prettier --write src"
   },
   "keywords": [
     "airtable",
     "typescript",
     "types",
     "generator",
-    "cli"
+    "cli",
+    "zod"
   ],
   "license": "MIT",
   "dependencies": {
     "airtable": "^0.12.2",
-    "dotenv": "^16.4.5",
-    "zod": "^3.23.8"
+    "dotenv": "^17.4.2"
+  },
+  "peerDependencies": {
+    "zod": "^3.25.0 || ^4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "zod": {
+      "optional": true
+    }
   },
   "devDependencies": {
-    "@eslint/eslintrc": "^3.3.1",
-    "@eslint/js": "^9.33.0",
-    "@types/node": "^20.11.24",
-    "@typescript-eslint/eslint-plugin": "^7.18.0",
-    "@typescript-eslint/parser": "^7.18.0",
-    "@vitest/ui": "^1.6.0",
-    "eslint": "^8.57.0",
-    "prettier": "^3.2.5",
-    "typescript": "^5.4.2",
-    "vite": "^5.1.4",
-    "vitest": "^1.6.0"
+    "@eslint/js": "^9.39.5",
+    "@types/node": "^24.13.3",
+    "@typescript-eslint/eslint-plugin": "^8.67.0",
+    "@typescript-eslint/parser": "^8.67.0",
+    "@vitest/ui": "^3.2.7",
+    "eslint": "^9.39.5",
+    "prettier": "^3.9.6",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.67.0",
+    "vitest": "^3.2.7",
+    "zod": "^4.4.3",
+    "zod-v3": "npm:zod@^3.25.76"
   },
   "engines": {
-    "node": ">=16.0.0"
+    "node": ">=22.12.0"
   },
   "repository": {
     "type": "git",

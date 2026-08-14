@@ -1,4 +1,12 @@
 import pkg from '../../package.json';
+
+export class UnknownOptionError extends Error {
+  constructor(public readonly option: string) {
+    super(`Unknown option: ${option}`);
+    this.name = 'UnknownOptionError';
+  }
+}
+
 export interface CliOptions {
   baseId?: string;
   output?: string;
@@ -42,7 +50,10 @@ export const parseArguments = (args: string[]): CliOptions => {
 
       case '--native':
       case '--no-flatten':
+        // Native is the default, but passing it explicitly must still win over
+        // an earlier --flatten instead of being silently discarded.
         options.native = true;
+        options.flatten = false;
         break;
 
       case '--tables':
@@ -70,6 +81,14 @@ export const parseArguments = (args: string[]): CliOptions => {
       case '--version':
       case '-v':
         options.version = true;
+        break;
+
+      default:
+        // Unknown flags used to be dropped on the floor, which is how the
+        // long-removed `--format zod` kept looking like it worked.
+        if (arg.startsWith('-')) {
+          throw new UnknownOptionError(arg);
+        }
         break;
     }
   }
@@ -117,15 +136,10 @@ ENVIRONMENT VARIABLES:
   AIRTABLE_PERSONAL_TOKEN  Your Airtable personal access token (required)
   AIRTABLE_BASE_ID        Default base ID if --base-id is not provided
 
-For more information, visit: https://github.com/username/airtable-types-gen
+For more information, visit: https://github.com/Guischk/airtable-types-gen
 `;
 
-  console.log(
-    help.replace(
-      'https://github.com/username/airtable-types-gen',
-      'https://github.com/Guischk/airtable-types-gen'
-    )
-  );
+  console.log(help);
 };
 
 export const printVersion = (): void => {

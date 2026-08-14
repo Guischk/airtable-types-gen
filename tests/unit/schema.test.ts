@@ -11,8 +11,8 @@ import { AirtableField } from '../../src/types';
 describe('detectComputedField', () => {
   it('should detect computed field types', () => {
     const computedTypes = ['formula', 'rollup', 'count', 'lookup', 'createdTime', 'autoNumber'];
-    
-    computedTypes.forEach(type => {
+
+    computedTypes.forEach((type) => {
       const field: AirtableField = { id: 'test', name: 'Test', type };
       expect(detectComputedField(field)).toBe(true);
     });
@@ -25,8 +25,8 @@ describe('detectComputedField', () => {
 
   it('should not detect non-computed field types as computed', () => {
     const nonComputedTypes = ['singleLineText', 'number', 'checkbox', 'email'];
-    
-    nonComputedTypes.forEach(type => {
+
+    nonComputedTypes.forEach((type) => {
       const field: AirtableField = { id: 'test', name: 'Test', type };
       expect(detectComputedField(field)).toBe(false);
     });
@@ -36,8 +36,8 @@ describe('detectComputedField', () => {
 describe('isAlwaysPresentComputed', () => {
   it('should identify always present computed types', () => {
     const alwaysPresentTypes = ['autoNumber', 'createdTime', 'lastModifiedTime'];
-    
-    alwaysPresentTypes.forEach(type => {
+
+    alwaysPresentTypes.forEach((type) => {
       const field: AirtableField = { id: 'test', name: 'Test', type };
       expect(isAlwaysPresentComputed(field)).toBe(true);
     });
@@ -45,8 +45,8 @@ describe('isAlwaysPresentComputed', () => {
 
   it('should identify always present field names', () => {
     const alwaysPresentNames = ['airtable_id', 'id', 'ID', 'Airtable_ID'];
-    
-    alwaysPresentNames.forEach(name => {
+
+    alwaysPresentNames.forEach((name) => {
       const field: AirtableField = { id: 'test', name, type: 'singleLineText' };
       expect(isAlwaysPresentComputed(field)).toBe(true);
     });
@@ -66,7 +66,7 @@ describe('mapAirtableTypeToTSEnhanced', () => {
     testCases.forEach(({ type, expectedType }) => {
       const field: AirtableField = { id: 'test', name: 'Test', type };
       const result = mapAirtableTypeToTSEnhanced(field);
-      
+
       expect(result.type).toBe(expectedType);
       expect(result.strictType).toBe(expectedType);
     });
@@ -78,12 +78,8 @@ describe('mapAirtableTypeToTSEnhanced', () => {
       name: 'Test',
       type: 'singleSelect',
       options: {
-        choices: [
-          { name: 'Option A' },
-          { name: 'Option B' },
-          { name: 'Option C' }
-        ]
-      }
+        choices: [{ name: 'Option A' }, { name: 'Option B' }, { name: 'Option C' }],
+      },
     };
 
     const result = mapAirtableTypeToTSEnhanced(field);
@@ -96,11 +92,8 @@ describe('mapAirtableTypeToTSEnhanced', () => {
       name: 'Test',
       type: 'multipleSelects',
       options: {
-        choices: [
-          { name: 'Tag1' },
-          { name: 'Tag2' }
-        ]
-      }
+        choices: [{ name: 'Tag1' }, { name: 'Tag2' }],
+      },
     };
 
     const result = mapAirtableTypeToTSEnhanced(field);
@@ -111,7 +104,7 @@ describe('mapAirtableTypeToTSEnhanced', () => {
     const computedField: AirtableField = {
       id: 'test',
       name: 'Test',
-      type: 'formula'
+      type: 'formula',
     };
 
     const result = mapAirtableTypeToTSEnhanced(computedField);
@@ -123,7 +116,7 @@ describe('mapAirtableTypeToTSEnhanced', () => {
     const regularField: AirtableField = {
       id: 'test',
       name: 'Test',
-      type: 'singleLineText'
+      type: 'singleLineText',
     };
 
     const result = mapAirtableTypeToTSEnhanced(regularField);
@@ -134,11 +127,13 @@ describe('mapAirtableTypeToTSEnhanced', () => {
     const aiTextField: AirtableField = {
       id: 'test',
       name: 'Summary',
-      type: 'aiText'
+      type: 'aiText',
     };
 
     const result = mapAirtableTypeToTSEnhanced(aiTextField);
-    expect(result.type).toBe('{ state: "generated" | "pending" | "error" | "empty"; value: string; isStale: boolean }');
+    expect(result.type).toBe(
+      '{ state: "generated" | "pending" | "error" | "empty"; value: string; isStale: boolean }'
+    );
     expect(result.strictType).toBe('AirtableAiTextValue');
     expect(result.description).toContain('AI generated text object');
   });
@@ -147,7 +142,7 @@ describe('mapAirtableTypeToTSEnhanced', () => {
     const aiTextField: AirtableField = {
       id: 'test',
       name: 'AI Summary',
-      type: 'aiText'
+      type: 'aiText',
     };
 
     const result = mapAirtableTypeToTSEnhanced(aiTextField);
@@ -178,10 +173,10 @@ describe('generatePropertyName', () => {
       'Email Address',
       'Phone Number',
       'Created At',
-      'Special!@#$%Characters'
+      'Special!@#$%Characters',
     ];
 
-    testCases.forEach(name => {
+    testCases.forEach((name) => {
       expect(generatePropertyName(name)).toBe(name);
     });
   });

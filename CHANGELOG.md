@@ -5,6 +5,81 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-08-15
+
+### 💥 Breaking
+
+- **Node.js 22.12+ required** (was 16). Node 20 reached end of life in March 2026; the
+  toolchain now targets the active LTS line (24 "Krypton").
+- **`zod` moved to an optional peer dependency** on `^3.25.0 || ^4.0.0`. Install it
+  yourself if you use the default Zod output; `--typescript-only` does not need it.
+- **Generated Zod files export `validateTableRecord`** instead of the `validateRecord`
+  stub, which always threw and collided by name with the real `validateRecord` in
+  `airtable-types-gen/runtime`. It is backed by a new `AIRTABLE_SCHEMAS` registry and
+  actually validates.
+- **Generated TypeScript uses double-quoted table-name literals** (`"Users"` rather than
+  `'Users'`), matching the Zod output and escaping correctly.
+- **Unknown CLI options now exit non-zero** instead of being silently ignored.
+
+### ✨ Added
+
+- **Zod 3 and Zod 4 support.** The generator emits Zod source text directly instead of
+  building a schema object and reverse-engineering it through `_def`. That introspection
+  was Zod-3-only — Zod 4 reshaped the internals — so installing Zod 4 previously broke
+  28 tests. Every emitted expression is now evaluated against both majors in CI.
+- **`AIRTABLE_TABLE_NAMES` in multi-file TypeScript output**, which 0.4.0 claimed for
+  "all modes" but never emitted there. `GetTableFields` was missing too.
+- **`duration`, `singleCollaborator` and `multipleCollaborators`** field types are mapped
+  (33 types total). `duration` previously fell through to `string` instead of `number`.
+- **Hostile-input test coverage** for table and field names containing quotes,
+  backslashes, comment terminators, leading digits and emoji.
+
+### 🐛 Fixed
+
+- **Progress logs corrupted stdout output.** `airtable-types-gen > schemas.ts` wrote
+  `[Schema] Fetching base schema…` into the generated module, producing a file that does
+  not parse. All progress output moves to stderr.
+- **`--flatten` was dropped in single-file Zod mode.** The creation/update helpers and
+  the `flattenRecord` re-export were never emitted; only the multi-file path passed the
+  flag through.
+- **Escaping is centralised.** Select choices in TypeScript output, table-name literals
+  and property keys used hand-rolled quoting that mishandled backslashes and embedded
+  quotes — 0.4.1 fixed only the Zod half. A description containing `*/` could also close
+  its JSDoc block early and spill into the file as code.
+- **Table names that are not valid identifiers emitted unparseable source.** `2024 Sales`
+  produced `interface 2024SalesRecord`; an emoji-only name produced a bare `Record`.
+- **Multi-file output silently overwrote colliding filenames** (`My Table` vs
+  `my-table`), and a symbol-only name produced `.ts` plus an unresolvable `import './.js'`.
+- **`isAlwaysPresentComputed` matched "id" as a substring**, so fields named Paid, Video
+  or Valid were incorrectly marked non-optional.
+- **`--native` / `--no-flatten` were parsed and then ignored.**
+- **`WritableOnly<T>` evaluated to `{}` for every `T`.**
+- **`exports` listed `types` after `import`/`require`**, so the condition never applied
+  and TypeScript consumers on node16/bundler resolution resolved no types at all.
+- **`bin/` spawned a second Node process** and reported success when killed by a signal.
+- **Fidelity of emitted Zod**: `.positive()` on `autoNumber` and attachment `size` no
+  longer degrades to `.min(0)`.
+- **dotenv 17's startup banner is suppressed.** It writes to stdout, so left enabled it
+  would have reintroduced the corrupted-redirect bug above via the dependency upgrade.
+
+### 🔧 Toolchain
+
+- **Migrated from bun to pnpm** for supply-chain reasons. Dependency lifecycle scripts
+  are blocked by default with a one-entry reviewed allowlist in `pnpm-workspace.yaml`;
+  `.npmrc` sets `minimum-release-age=4320` so nothing published in the last three days
+  can enter the lockfile; `pnpm-lock.yaml` is committed.
+- ESLint 8 → 9 with a flat config, `@typescript-eslint` 7 → 8, Vitest 1 → 3 (which
+  retires the CJS deprecation warning in `KNOWN_ISSUES.md`), `@types/node` 20 → 24,
+  dotenv 16 → 17. The redundant explicit `vite` devDependency is dropped.
+- Test suite grows from 117 to 193 tests.
+
+### 📚 Documentation
+
+- README corrected throughout: the removed `--format zod` flag (still documented in five
+  places), the wrong generated-interface shape, `Readonly<z.infer<…>>` (untrue since
+  0.3.0), the `Users` vs `UsersRecord` type name, the mislabelled `--separate-files`
+  examples, and the stale test count.
+
 ## [0.4.1] - 2026-01-23
 
 ### 🐛 Fixed

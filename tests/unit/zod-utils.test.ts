@@ -64,7 +64,7 @@ describe('Zod Utils', () => {
       expect(result.success).toBe(false);
       if (!result.success) {
         expect(result.error).toBeInstanceOf(z.ZodError);
-        expect(result.error.errors.length).toBeGreaterThan(0);
+        expect(result.error.issues.length).toBeGreaterThan(0);
       }
     });
   });
@@ -85,14 +85,10 @@ describe('Zod Utils', () => {
 
   describe('safeValidateRecords', () => {
     it('should separate valid and invalid records', () => {
-      const data = [
-        validData,
-        invalidData,
-        { ...validData, id: 'rec789' },
-      ];
+      const data = [validData, invalidData, { ...validData, id: 'rec789' }];
 
       const result = safeValidateRecords(testSchema, data);
-      
+
       expect(result.valid).toHaveLength(2);
       expect(result.invalid).toHaveLength(1);
       expect(result.invalid[0].index).toBe(1);
@@ -103,7 +99,7 @@ describe('Zod Utils', () => {
     it('should handle all valid records', () => {
       const data = [validData, { ...validData, id: 'rec456' }];
       const result = safeValidateRecords(testSchema, data);
-      
+
       expect(result.valid).toHaveLength(2);
       expect(result.invalid).toHaveLength(0);
     });
@@ -111,7 +107,7 @@ describe('Zod Utils', () => {
     it('should handle all invalid records', () => {
       const data = [invalidData, { ...invalidData, id: 'rec456' }];
       const result = safeValidateRecords(testSchema, data);
-      
+
       expect(result.valid).toHaveLength(0);
       expect(result.invalid).toHaveLength(2);
     });
@@ -120,16 +116,16 @@ describe('Zod Utils', () => {
   describe('createUpdateSchema', () => {
     it('should make all fields optional', () => {
       const updateSchema = createUpdateSchema(testSchema);
-      
+
       // Should accept partial data
       const partialData = { name: 'Jane Doe' };
       const result = updateSchema.parse(partialData);
       expect(result).toEqual(partialData);
-      
+
       // Should accept full data
       const fullResult = updateSchema.parse(validData);
       expect(fullResult).toEqual(validData);
-      
+
       // Should accept empty object
       const emptyResult = updateSchema.parse({});
       expect(emptyResult).toEqual({});
@@ -139,7 +135,7 @@ describe('Zod Utils', () => {
   describe('createCreationSchema', () => {
     it('should exclude readonly fields', () => {
       const creationSchema = createCreationSchema(testSchema, ['id']);
-      
+
       // Should work without id field
       const dataWithoutId = {
         name: 'Jane Doe',
@@ -147,10 +143,10 @@ describe('Zod Utils', () => {
         age: 25,
         isActive: false,
       };
-      
+
       const result = creationSchema.parse(dataWithoutId);
       expect(result).toEqual(dataWithoutId);
-      
+
       // Should fail if required fields are missing
       expect(() => creationSchema.parse({ name: 'Jane' })).toThrow();
     });
@@ -234,7 +230,7 @@ describe('Zod Utils', () => {
     describe('recordId', () => {
       it('should create valid record ID schema', () => {
         const schema = airtableSchemaHelpers.recordId();
-        
+
         expect(schema.parse('rec123')).toBe('rec123');
         expect(() => schema.parse('')).toThrow();
         expect(() => schema.parse(123)).toThrow();
@@ -244,7 +240,7 @@ describe('Zod Utils', () => {
     describe('timestamp', () => {
       it('should validate ISO datetime strings', () => {
         const schema = airtableSchemaHelpers.timestamp();
-        
+
         expect(schema.parse('2023-12-01T10:00:00.000Z')).toBe('2023-12-01T10:00:00.000Z');
         expect(() => schema.parse('invalid-date')).toThrow();
         expect(() => schema.parse('2023-12-01')).toThrow();
@@ -254,7 +250,7 @@ describe('Zod Utils', () => {
     describe('attachment', () => {
       it('should validate attachment objects', () => {
         const schema = airtableSchemaHelpers.attachment();
-        
+
         const validAttachment = {
           id: 'att123',
           url: 'https://example.com/file.pdf',
@@ -262,46 +258,50 @@ describe('Zod Utils', () => {
           size: 1024,
           type: 'application/pdf',
         };
-        
+
         expect(schema.parse(validAttachment)).toEqual(validAttachment);
-        
-        expect(() => schema.parse({
-          id: 'att123',
-          url: 'invalid-url',
-          filename: 'doc.pdf',
-          size: -1,
-          type: 'pdf',
-        })).toThrow();
+
+        expect(() =>
+          schema.parse({
+            id: 'att123',
+            url: 'invalid-url',
+            filename: 'doc.pdf',
+            size: -1,
+            type: 'pdf',
+          })
+        ).toThrow();
       });
     });
 
     describe('user', () => {
       it('should validate user objects', () => {
         const schema = airtableSchemaHelpers.user();
-        
+
         const validUser = {
           id: 'usr123',
           email: 'user@example.com',
           name: 'John Doe',
         };
-        
+
         expect(schema.parse(validUser)).toEqual(validUser);
-        
-        expect(() => schema.parse({
-          id: 'usr123',
-          email: 'invalid-email',
-          name: 'John',
-        })).toThrow();
+
+        expect(() =>
+          schema.parse({
+            id: 'usr123',
+            email: 'invalid-email',
+            name: 'John',
+          })
+        ).toThrow();
       });
     });
 
     describe('linkedRecords', () => {
       it('should validate array of record IDs', () => {
         const schema = airtableSchemaHelpers.linkedRecords();
-        
+
         expect(schema.parse(['rec123', 'rec456'])).toEqual(['rec123', 'rec456']);
         expect(schema.parse([])).toEqual([]);
-        
+
         expect(() => schema.parse(['rec123', 123])).toThrow();
         expect(() => schema.parse('not-an-array')).toThrow();
       });
@@ -311,7 +311,7 @@ describe('Zod Utils', () => {
       it('should make fields optional and nullable', () => {
         const baseSchema = z.string();
         const optionalSchema = airtableSchemaHelpers.optional(baseSchema);
-        
+
         expect(optionalSchema.parse('test')).toBe('test');
         expect(optionalSchema.parse(null)).toBe(null);
         expect(optionalSchema.parse(undefined)).toBe(undefined);

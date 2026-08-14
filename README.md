@@ -7,22 +7,33 @@ Inspired by Supabase's type generation, this tool provides a simple CLI to gener
 ## Features
 
 - 🚀 **Simple CLI** - Inspired by `supabase gen types` with Zod-first approach
-- 🎯 **Smart Type Detection** - 32+ Airtable field types mapped to TypeScript and Zod
+- 🎯 **Smart Type Detection** - 33 Airtable field types mapped to TypeScript and Zod
 - 🔒 **Readonly Validation** - Computed fields marked `.readonly()` in Zod for runtime safety
 - 🏷️ **Strict Types** - Union types for select fields, perfect TS/Zod alignment
 - 🛠️ **Runtime Utilities** - Record flattening and CRUD helper functions
 - 📦 **Multi-file Output** - Generate one file per table with an index
 - ✅ **Zod by Default** - Runtime validation with inferred TypeScript types
 - ✨ **Conflict Resolution** - Intelligent property naming for edge cases
-- 🧪 **Well Tested** - Comprehensive test suite (106 tests) with Vitest
+- 🧪 **Well Tested** - Comprehensive test suite (193 tests) with Vitest
+- 🔀 **Zod 3 and Zod 4** - Generated schemas work on either major
 
 ## Installation
 
 ```bash
-npm install -g airtable-types-gen
+pnpm add -g airtable-types-gen
 
 # Or use without installing
-npx airtable-types-gen --help
+pnpm dlx airtable-types-gen --help
+```
+
+Requires Node.js 22.12 or newer.
+
+`zod` is an optional peer dependency covering both majors (`^3.25 || ^4`).
+Install it alongside if you use the default Zod output; it is not needed for
+`--typescript-only`:
+
+```bash
+pnpm add zod
 ```
 
 ## Quick Start
@@ -53,25 +64,25 @@ Get your personal access token from [Airtable Developer Hub](https://airtable.co
 
 ```bash
 # Generate Zod schemas with TypeScript types (default)
-npx airtable-types-gen > schemas.ts
+pnpm dlx airtable-types-gen > schemas.ts
 
 # Generate to a specific file
-npx airtable-types-gen --output src/types/airtable.ts
+pnpm dlx airtable-types-gen --output src/types/airtable.ts
 
 # Generate only TypeScript types (no validation)
-npx airtable-types-gen --typescript-only --output types.ts
+pnpm dlx airtable-types-gen --typescript-only --output types.ts
 
 # Generate with flatten support (all fields at root level)
-npx airtable-types-gen --flatten --output schemas.ts
+pnpm dlx airtable-types-gen --flatten --output schemas.ts
 
 # Generate schemas for specific tables only
-npx airtable-types-gen --tables "Users,Projects" --output schemas.ts
+pnpm dlx airtable-types-gen --tables "Users,Projects" --output schemas.ts
 
 # Generate separate files per table
-npx airtable-types-gen --separate-files --output ./schemas/
+pnpm dlx airtable-types-gen --separate-files --output ./schemas/
 
 # You can still override with --base-id if needed
-npx airtable-types-gen --base-id "appXXXXXXXX" --output schemas.ts
+pnpm dlx airtable-types-gen --base-id "appXXXXXXXX" --output schemas.ts
 ```
 
 ## CLI Options
@@ -92,6 +103,8 @@ OPTIONS:
   -h, --help              Show help message
   -v, --version           Show version information
 
+Unknown options are rejected with a non-zero exit code rather than ignored.
+
 ENVIRONMENT VARIABLES:
   AIRTABLE_PERSONAL_TOKEN  Your Airtable personal access token (required)
   AIRTABLE_BASE_ID        Default base ID if --base-id is not provided
@@ -99,44 +112,78 @@ ENVIRONMENT VARIABLES:
 
 ## Generated Types (TypeScript)
 
-### Basic Interface
+Two shapes are available. **Native** (the default) mirrors Airtable's own record
+structure; **flattened** (`--flatten`) lifts every field to the root.
+
+### Native shape (default)
 
 ```typescript
 /**
  * Interface generated for table "Users"
  * @description Users table from Airtable
  */
-export interface UsersRecord {
-  /** Unique Airtable record ID */
-  id: string;
+interface UsersRecordFields {
   Name: string;
   Email: string;
   Age: number;
   Active: boolean;
-  Role: 'Admin' | 'User' | 'Guest';
+  Role: "Admin" | "User" | "Guest";
   /** 🔒 Computed by Airtable - readonly ISO date string */
-  Created: string;
+  readonly Created: string;
   /** 🔒 Computed by Airtable - auto-incrementing number */
-  'Auto ID': number;
+  readonly ["Auto ID"]: number;
+}
+
+export interface UsersRecord {
+  /** Unique Airtable record ID */
+  id: string;
+  /** Record fields */
+  fields: UsersRecordFields;
+  /** Record creation time */
+  createdTime: string;
 }
 ```
+
+### Flattened shape (`--flatten`)
+
+```typescript
+export interface UsersRecord {
+  /** Unique Airtable record ID */
+  record_id: string;
+  Name: string;
+  Email: string;
+  readonly Created: string;
+}
+```
+
+Note the record ID is `id` in native mode and `record_id` in flattened mode.
 
 ### Utility Types
 
 ```typescript
 // Table name union
-export type AirtableTableName = 'Users' | 'Projects';
+export type AirtableTableName = "Users" | "Projects";
+
+// Runtime constant, iterable at runtime
+export const AIRTABLE_TABLE_NAMES = ["Users", "Projects"] as const;
 
 // Get record type for a table
 export type GetTableRecord<T extends AirtableTableName> = AirtableTableTypes[T];
+export type GetTableFields<T extends AirtableTableName> = GetTableRecord<T>["fields"];
 
-// CRUD operation types
-export type CreateRecord<T extends AirtableTableName> = Partial<Omit<GetTableRecord<T>, 'id'>>;
-export type UpdateRecord<T extends AirtableTableName> = Partial<Omit<GetTableRecord<T>, 'id'>> & {
+// CRUD operation types — native mode
+export type CreateRecord<T extends AirtableTableName> = {
+  fields: Partial<GetTableFields<T>>;
+};
+export type UpdateRecord<T extends AirtableTableName> = {
   id: string;
+  fields: Partial<GetTableFields<T>>;
 };
 export type ReadRecord<T extends AirtableTableName> = GetTableRecord<T>;
 ```
+
+In flattened mode `CreateRecord`/`UpdateRecord` operate on the flat shape and
+key off `record_id` instead of a nested `fields` object.
 
 ## Library Usage
 
@@ -145,13 +192,15 @@ export type ReadRecord<T extends AirtableTableName> = GetTableRecord<T>;
 ```typescript
 import type { UsersRecord, ProjectsRecord, CreateRecord, UpdateRecord } from './types';
 
-// Type-safe record creation
+// Type-safe record creation (native shape: fields live under `fields`)
 const newUser: CreateRecord<'Users'> = {
-  Name: 'John Doe',
-  Email: 'john@example.com',
-  Active: true,
-  Role: 'User',
-  // Note: computed/readonly fields like 'Created' and 'Auto ID' are not required in creation flows
+  fields: {
+    Name: 'John Doe',
+    Email: 'john@example.com',
+    Active: true,
+    Role: 'User',
+    // Computed/readonly fields such as 'Created' and 'Auto ID' are not writable
+  },
 };
 ```
 
@@ -209,29 +258,35 @@ console.log(result.content); // Generated TypeScript code
 console.log(result.schema); // Parsed Airtable schema
 ```
 
-## Zod Schemas (new in v0.2)
+## Zod Schemas
 
-You can generate Zod schemas instead of TypeScript-only types:
+Zod is the default output; use `--typescript-only` to opt out.
 
 ```bash
 # Single file with Zod schemas
-npx airtable-types-gen --base-id appXXXXXXXX --format zod --output zod-schemas.ts
+pnpm dlx airtable-types-gen --base-id appXXXXXXXX --output zod-schemas.ts
 
 # Flattened Zod schemas
-npx airtable-types-gen --base-id appXXXXXXXX --format zod --flatten --output zod-schemas-flat.ts
+pnpm dlx airtable-types-gen --base-id appXXXXXXXX --flatten --output zod-schemas-flat.ts
 
 # One file per table (+ index.ts) with Zod
-npx airtable-types-gen --base-id appXXXXXXXX --format zod --separate-files --output ./schemas
+pnpm dlx airtable-types-gen --base-id appXXXXXXXX --separate-files --output ./schemas
 ```
+
+### Zod 3 and Zod 4
+
+Generated schemas are emitted as source text that is valid on both majors, so
+whichever one your project already uses will work. The peer range is
+`^3.25 || ^4`, and every emitted expression is exercised against both in CI.
 
 Example usage:
 
 ```ts
-import { UsersSchema, type Users } from './schemas/users';
+import { UsersSchema, type UsersRecord } from './schemas/users';
 import { validateRecord, safeValidateRecord } from 'airtable-types-gen/runtime';
 
 // Validate at runtime and get typed data
-const user: Users = validateRecord(UsersSchema, {
+const user: UsersRecord = validateRecord(UsersSchema, {
   record_id: 'rec123',
   Name: 'Jane',
   Email: 'jane@example.com'
@@ -240,18 +295,24 @@ const user: Users = validateRecord(UsersSchema, {
 // Or safely
 const result = safeValidateRecord(UsersSchema, someData);
 if (result.success) {
-  // result.data is typed as Users
+  // result.data is typed as UsersRecord
 } else {
   console.error(result.error);
 }
 ```
 
-### Zod specifics in v0.2.2
+### Zod specifics
 
-- All field schemas are marked with `.optional()` to reflect Airtable's sparse payloads.
-- The inferred TS type exported next to each schema is `Readonly<z.infer<typeof ...>>` to model immutability at the type level.
-- In flattened Zod output (`--format zod --flatten`), the generated file also re-exports `flattenRecord` for convenience.
-- In multi-file Zod output (`--separate-files`), the index adds per-table readonly fields arrays and creation/update helpers.
+- Computed fields are marked `.readonly()`. They are additionally `.optional()`
+  unless Airtable always populates them (`autoNumber`, `createdTime`,
+  `lastModifiedTime`). Writable fields are required.
+- The inferred type exported next to each schema is `z.infer<typeof ...>`.
+- In flattened Zod output (`--flatten`), the generated file also re-exports
+  `flattenRecord`, and adds per-table `…CreationSchema` / `…UpdateSchema`
+  helpers. These helpers are flattened-mode only.
+- Per-table `…ReadonlyFields` arrays are emitted in both modes.
+- Every generated file exposes an `AIRTABLE_SCHEMAS` registry and a
+  `validateTableRecord(tableName, data)` helper.
 
 Example (flattened Zod + multi-file):
 
@@ -276,11 +337,11 @@ UsersUpdateSchema.parse({ Name: 'Ada' });   // partial update
 Generate one file per table plus an index re-export:
 
 ```bash
-# TypeScript types per table
-npx airtable-types-gen --base-id appXXXXXXXX --separate-files --output ./types
+# Zod schemas per table (default)
+pnpm dlx airtable-types-gen --base-id appXXXXXXXX --separate-files --output ./schemas
 
-# Zod schemas per table
-npx airtable-types-gen --base-id appXXXXXXXX --format zod --separate-files --output ./schemas
+# TypeScript types per table
+pnpm dlx airtable-types-gen --base-id appXXXXXXXX --typescript-only --separate-files --output ./types
 ```
 
 This produces files like:
@@ -302,8 +363,8 @@ Add to your `package.json`:
 {
   "scripts": {
     "types:generate": "airtable-types-gen --base-id $AIRTABLE_BASE_ID --output src/types/airtable.ts",
-    "types:watch": "chokidar 'airtable-schema.json' -c 'npm run types:generate'",
-    "build": "npm run types:generate && tsc"
+    "types:watch": "chokidar 'airtable-schema.json' -c 'pnpm run types:generate'",
+    "build": "pnpm run types:generate && tsc"
   }
 }
 ```
@@ -321,17 +382,18 @@ jobs:
   generate-types:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '24'
 
-      - run: npx airtable-types-gen --base-id ${{ secrets.AIRTABLE_BASE_ID }} --output src/types/airtable.ts
+      - run: pnpm dlx airtable-types-gen --base-id ${{ secrets.AIRTABLE_BASE_ID }} --output src/types/airtable.ts
         env:
           AIRTABLE_PERSONAL_TOKEN: ${{ secrets.AIRTABLE_PERSONAL_TOKEN }}
 
       - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v5
+        uses: peter-evans/create-pull-request@v7
         with:
           title: 'Update Airtable types'
           body: 'Auto-generated type updates from Airtable schema changes'
@@ -364,24 +426,35 @@ Handles edge cases gracefully:
 
 ## Development
 
+This project uses **pnpm** exclusively. Other lockfiles are gitignored.
+
 ```bash
 # Clone and install
 git clone https://github.com/Guischk/airtable-types-gen
 cd airtable-types-gen
-npm install
+pnpm install
 
-# Build
-npm run build
+# Build (runs lint + format first)
+pnpm run build
 
 # Test
-npm test
-npm run test:watch
-npm run test:ui
+pnpm test
+pnpm run test:watch
+pnpm run test:ui
 
 # Lint
-npm run lint
-npm run format
+pnpm run lint
+pnpm run format
 ```
+
+### Supply-chain posture
+
+- `pnpm-lock.yaml` is committed so the dependency graph is reviewable.
+- Dependency lifecycle scripts are blocked by default; the allowlist lives in
+  `pnpm-workspace.yaml` and currently holds one reviewed entry (`esbuild`,
+  dev-only, required by vitest).
+- `.npmrc` sets `minimum-release-age=4320`, so no version published within the
+  last three days can enter the lockfile.
 
 ## License
 
@@ -389,7 +462,7 @@ MIT
 
 ## Contributing
 
-Contributions welcome! Please read our contributing guidelines and submit PRs to the `main` branch.
+Contributions welcome! Please submit PRs against the `master` branch.
 
 ## Troubleshooting
 

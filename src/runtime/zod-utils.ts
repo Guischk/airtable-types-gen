@@ -56,20 +56,15 @@ export const safeValidateRecords = <T>(
 };
 
 /**
- * Creates a partial schema for updates (all fields optional except ID)
+ * Creates a partial schema for updates: every field becomes optional.
+ *
+ * Uses `.partial()` rather than rebuilding the shape by hand — Zod 4 exposes
+ * `_def`/shape entries differently, and `.partial()` behaves identically on
+ * both majors.
  */
 export const createUpdateSchema = <T extends z.ZodRawShape>(
   baseSchema: z.ZodObject<T>
-): z.ZodObject<any> => {
-  const shape = baseSchema.shape;
-  const partialShape: any = {};
-
-  for (const [key, schema] of Object.entries(shape)) {
-    partialShape[key] = schema.optional();
-  }
-
-  return z.object(partialShape);
-};
+): z.ZodObject<any> => baseSchema.partial() as unknown as z.ZodObject<any>;
 
 /**
  * Creates a creation schema (excludes computed/readonly fields)
@@ -78,16 +73,14 @@ export const createCreationSchema = <T extends z.ZodRawShape>(
   baseSchema: z.ZodObject<T>,
   readonlyFields: string[] = []
 ): z.ZodObject<any> => {
-  const shape = baseSchema.shape;
-  const creationShape: any = {};
-
-  for (const [key, schema] of Object.entries(shape)) {
-    if (!readonlyFields.includes(key)) {
-      creationShape[key] = schema;
+  const mask: Record<string, true> = {};
+  for (const key of Object.keys(baseSchema.shape)) {
+    if (readonlyFields.includes(key)) {
+      mask[key] = true;
     }
   }
 
-  return z.object(creationShape);
+  return baseSchema.omit(mask as any) as unknown as z.ZodObject<any>;
 };
 
 /**
@@ -109,10 +102,15 @@ export type CreateType<T, K extends keyof T = never> = Omit<T, K>;
  * Helper to format Zod validation errors in a readable way
  */
 export const formatZodError = (error: z.ZodError): string => {
-  return error.errors
-    .map((err) => {
-      const path = err.path.length > 0 ? `${err.path.join('.')}: ` : '';
-      return `${path}${err.message}`;
+  // `issues` is the canonical field on both majors; Zod 3 also aliased it as
+  // `errors`, which Zod 4 dropped. Read `issues` and fall back for safety.
+  const issues: { path: PropertyKey[]; message: string }[] =
+    error.issues ?? (error as unknown as { errors: typeof error.issues }).errors ?? [];
+
+  return issues
+    .map((issue) => {
+      const path = issue.path.length > 0 ? `${issue.path.join('.')}: ` : '';
+      return `${path}${issue.message}`;
     })
     .join(', ');
 };
