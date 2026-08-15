@@ -87,6 +87,9 @@ public
 *.sublime-project
 CLAUDE.md
 .claude/
+# Agent workflow scaffolding, generated locally. Same rule as .claude/ above:
+# project config is versioned, agent config is not.
+docs/agents/
 
 # Mac system files
 .DS_Store
