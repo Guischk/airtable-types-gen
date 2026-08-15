@@ -187,8 +187,6 @@ export const mapAirtableTypeToZod = (field: AirtableField): ZodMappingResult => 
   return { expression, readonly, description };
 };
 
-export const generatePropertyName = (fieldName: string): string => fieldName;
-
 export const generateSchemaName = (tableName: string): string =>
   `${toPascalCaseIdentifier(tableName)}Schema`;
 

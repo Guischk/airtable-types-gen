@@ -33,8 +33,9 @@ export const generateTableInterface = (table: AirtableTable, flatten: boolean = 
       const typeMapping = mapAirtableTypeToTSEnhanced(field);
       const propertyType = typeMapping.type;
       const isReadonly = typeMapping.readonly;
-      // These interfaces describe raw Airtable payloads, and Airtable omits
-      // every empty cell — so no field is guaranteed to be there.
+      // These interfaces describe the wire format, where every field is
+      // absent-able: Airtable omits every empty cell. See `empty-value.ts` for
+      // what the Zod emitter does with the same fact on the read path.
       const optional = '?';
 
       const comment = describe(field.description, typeMapping.description);
@@ -72,7 +73,7 @@ export const generateTableInterface = (table: AirtableTable, flatten: boolean = 
       const typeMapping = mapAirtableTypeToTSEnhanced(field);
       const propertyType = typeMapping.type;
       const isReadonly = typeMapping.readonly;
-      // Raw Airtable payloads omit every empty cell, so nothing is guaranteed.
+      // Wire format: every field is absent-able. See the flattened branch above.
       const optional = '?';
 
       const comment = describe(field.description, typeMapping.description);

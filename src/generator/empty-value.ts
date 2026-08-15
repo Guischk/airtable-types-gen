@@ -35,33 +35,31 @@ export interface EmptyValue {
 }
 
 /** Airtable sends `""` for these, so an omission means the empty string. */
-const EMPTY_STRING_TYPES = ['singleLineText', 'multilineText', 'richText'] as const;
+const EMPTY_STRING_TYPES: readonly string[] = ['singleLineText', 'multilineText', 'richText'];
 
 /** Also empty-string types, but their own validation rejects `''`. */
-const VALIDATED_STRING_TYPES = ['email', 'url', 'phoneNumber'] as const;
+const VALIDATED_STRING_TYPES: readonly string[] = ['email', 'url', 'phoneNumber'];
 
 /** Airtable sends `[]` for these, so an omission means the empty array. */
-const EMPTY_ARRAY_TYPES = [
+const EMPTY_ARRAY_TYPES: readonly string[] = [
   'multipleSelects',
   'multipleAttachments',
   'multipleRecordLinks',
   'multipleCollaborators',
   'lookup',
   'multipleLookupValues',
-] as const;
-
-const includes = (types: readonly string[], type: string): boolean => types.includes(type);
+];
 
 export const emptyValueFor = (field: AirtableField): EmptyValue | undefined => {
-  if (includes(EMPTY_STRING_TYPES, field.type)) {
+  if (EMPTY_STRING_TYPES.includes(field.type)) {
     return { literal: "''", widenToEmpty: false };
   }
 
-  if (includes(VALIDATED_STRING_TYPES, field.type)) {
+  if (VALIDATED_STRING_TYPES.includes(field.type)) {
     return { literal: "''", widenToEmpty: true };
   }
 
-  if (includes(EMPTY_ARRAY_TYPES, field.type)) {
+  if (EMPTY_ARRAY_TYPES.includes(field.type)) {
     return { literal: '[]', widenToEmpty: false };
   }
 

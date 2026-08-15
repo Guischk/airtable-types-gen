@@ -36,10 +36,12 @@ schemas rejected most real Airtable records.
   other way, from optional to guaranteed, which needs no change.
 
 - **`--typescript-only` interfaces mark every field `?`.** That mode has no parse
-  step, so its interfaces describe raw Airtable data, where nothing is
-  guaranteed. The Zod output describes what leaves `.parse()`. The two emitters
-  now derive their optionality from one shared source and a test asserts they
-  agree.
+  step, so its interfaces describe the wire format, where every field is
+  absent-able. The Zod output describes what leaves `.parse()` instead. The two
+  emitters no longer each carry their own copy of an optionality rule — which is
+  how one wrong line came to live in two files — and
+  `tests/unit/emitter-alignment.test.ts` asserts field-by-field that they still
+  agree on what Airtable can omit.
 
 - **`ALWAYS_PRESENT_COMPUTED_TYPES` is gone**, along with the exported
   `isAlwaysPresentComputed`. Airtable documents no guarantee that a
@@ -84,6 +86,10 @@ schemas rejected most real Airtable records.
   the claim, and 0.6.0 implements it properly.
 - `CONTEXT.md` records the vocabulary this fix turned on — wire format, empty
   value, absent-able field, read path vs write path.
+- Cell-value fidelity — `formula`/`rollup` narrower than the field model
+  documents, and nested nullables such as attachment `url` — is deliberately not
+  addressed here and is tracked in
+  [#5](https://github.com/Guischk/airtable-types-gen/issues/5).
 
 ## [0.5.0] - 2026-08-15
 

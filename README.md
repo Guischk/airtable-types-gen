@@ -159,9 +159,10 @@ export interface UsersRecord {
 Note the record ID is `id` in native mode and `record_id` in flattened mode.
 
 **Every field is optional.** Airtable omits empty cells from its responses
-entirely, so raw payloads guarantee no field at all. These interfaces describe
-that raw data. The Zod schemas describe what comes back out of `.parse()`, where
-some of those fields are restored — see [Zod specifics](#zod-specifics).
+entirely, so the wire format guarantees no field at all — and these interfaces
+describe the wire format. The Zod schemas describe what comes back out of
+`.parse()`, where some of those fields are restored — see
+[Zod specifics](#zod-specifics).
 
 ### Utility Types
 
