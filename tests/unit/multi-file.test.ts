@@ -64,8 +64,8 @@ describe('Multi-File Generator', () => {
 
       expect(result).toContain('export interface UsersRecord');
       expect(result).toContain('record_id: string');
-      expect(result).toContain('Name:');
-      expect(result).toContain('Email:');
+      expect(result).toContain('Name?:');
+      expect(result).toContain('Email?:');
     });
 
     it('should generate Zod schema for a single table', () => {

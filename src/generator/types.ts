@@ -4,8 +4,7 @@ import {
   fetchBaseSchema,
   mapAirtableTypeToTSEnhanced,
   generateInterfaceName,
-  generatePropertyName,
-  isAlwaysPresentComputed,
+  resolvePropertyNames,
 } from './schema.js';
 
 export const generateTableInterface = (table: AirtableTable, flatten: boolean = false): string => {
@@ -26,33 +25,18 @@ export const generateTableInterface = (table: AirtableTable, flatten: boolean = 
     interfaceLines.push('  /** Unique Airtable record ID */');
     interfaceLines.push('  record_id: string;');
 
-    const propertyNames = new Set<string>();
-    propertyNames.add('record_id');
+    const propertyNames = resolvePropertyNames(table, true);
 
     table.fields.forEach((field, index) => {
-      let propertyName = generatePropertyName(field.name);
-
-      // Handle property name conflicts
-      if (propertyNames.has(propertyName) || propertyName === 'id') {
-        if (propertyName === 'id') {
-          if (field.type === 'autoNumber') {
-            propertyName = 'auto_id';
-          } else if (field.type === 'number') {
-            propertyName = 'field_id'; // Different from record_id
-          } else {
-            propertyName = `id_${field.type}`;
-          }
-        } else {
-          propertyName = `${propertyName}_${field.type}`;
-        }
-      }
-      propertyNames.add(propertyName);
+      const propertyName = propertyNames.get(field.id)!;
 
       const typeMapping = mapAirtableTypeToTSEnhanced(field);
       const propertyType = typeMapping.type;
       const isReadonly = typeMapping.readonly;
-      const isOptional = isReadonly && !isAlwaysPresentComputed(field);
-      const optional = isOptional ? '?' : '';
+      // These interfaces describe the wire format, where every field is
+      // absent-able: Airtable omits every empty cell. See `empty-value.ts` for
+      // what the Zod emitter does with the same fact on the read path.
+      const optional = '?';
 
       const comment = describe(field.description, typeMapping.description);
 
@@ -81,28 +65,16 @@ export const generateTableInterface = (table: AirtableTable, flatten: boolean = 
     // First, generate the Fields interface
     interfaceLines.push(`interface ${fieldsInterfaceName} {`);
 
-    const propertyNames = new Set<string>();
+    const propertyNames = resolvePropertyNames(table, false);
 
     table.fields.forEach((field, index) => {
-      let propertyName = generatePropertyName(field.name);
-
-      // Handle property name conflicts
-      if (propertyNames.has(propertyName)) {
-        if (field.type === 'autoNumber') {
-          propertyName = 'auto_id';
-        } else if (field.type === 'number' && propertyName === 'id') {
-          propertyName = 'record_id';
-        } else {
-          propertyName = `${propertyName}_${field.type}`;
-        }
-      }
-      propertyNames.add(propertyName);
+      const propertyName = propertyNames.get(field.id)!;
 
       const typeMapping = mapAirtableTypeToTSEnhanced(field);
       const propertyType = typeMapping.type;
       const isReadonly = typeMapping.readonly;
-      const isOptional = isReadonly && !isAlwaysPresentComputed(field);
-      const optional = isOptional ? '?' : '';
+      // Wire format: every field is absent-able. See the flattened branch above.
+      const optional = '?';
 
       const comment = describe(field.description, typeMapping.description);
 

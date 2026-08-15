@@ -58,9 +58,14 @@ export const safeValidateRecords = <T>(
 /**
  * Creates a partial schema for updates: every field becomes optional.
  *
- * Uses `.partial()` rather than rebuilding the shape by hand — Zod 4 exposes
- * `_def`/shape entries differently, and `.partial()` behaves identically on
- * both majors.
+ * @deprecated Use the generated `…UpdateSchema` instead.
+ *
+ * `.partial()` does not treat defaults the same way across Zod majors: Zod 3
+ * drops them, Zod 4 keeps applying them. Passing a generated read schema — which
+ * carries `.default('')`, `.default([])` and `.default(false)` — therefore
+ * produces an update payload that blanks every field the caller did not set,
+ * but only on Zod 4. The generated `…UpdateSchema` is built from a defaults-free
+ * shape and does not have that failure mode.
  */
 export const createUpdateSchema = <T extends z.ZodRawShape>(
   baseSchema: z.ZodObject<T>
@@ -68,6 +73,10 @@ export const createUpdateSchema = <T extends z.ZodRawShape>(
 
 /**
  * Creates a creation schema (excludes computed/readonly fields)
+ *
+ * @deprecated Use the generated `…CreationSchema` instead. Omitting readonly
+ * keys leaves the remaining defaults in place, so a creation payload arrives at
+ * Airtable carrying explicit empty values for fields the caller never set.
  */
 export const createCreationSchema = <T extends z.ZodRawShape>(
   baseSchema: z.ZodObject<T>,

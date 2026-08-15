@@ -1,12 +1,8 @@
 import { AirtableBaseSchema, AirtableTable } from '../types.js';
 import { describe, literal, propertyKey, sanitizeComment } from './emit.js';
-import { enrichFieldMetadata, isAlwaysPresentComputed } from './schema.js';
-import {
-  mapAirtableTypeToZod,
-  generatePropertyName,
-  generateSchemaName,
-  generateTypeName,
-} from './zod-schema.js';
+import { emptyValueFor } from './empty-value.js';
+import { enrichFieldMetadata, resolvePropertyNames } from './schema.js';
+import { mapAirtableTypeToZod, generateSchemaName, generateTypeName } from './zod-schema.js';
 
 /**
  * Emit the `  key: z.…,` entry (plus its JSDoc line) for one field.
@@ -16,7 +12,7 @@ const emitFieldEntry = (field: AirtableTable['fields'][number], propertyName: st
   const lines: string[] = [];
   const zodMapping = mapAirtableTypeToZod(field);
   const enrichedField = enrichFieldMetadata(field);
-  const isOptional = enrichedField.isReadonly && !isAlwaysPresentComputed(field);
+  const emptyValue = emptyValueFor(field);
 
   const comment = describe(field.description, zodMapping.description);
   if (comment) {
@@ -28,12 +24,73 @@ const emitFieldEntry = (field: AirtableTable['fields'][number], propertyName: st
   if (enrichedField.isReadonly) {
     expression += '.readonly()';
   }
-  if (isOptional) {
+
+  // Airtable omits every empty cell, so no field is guaranteed to arrive. Where
+  // the omission encodes a known value we hand that value back; elsewhere the
+  // field is simply absent.
+  if (emptyValue) {
+    if (emptyValue.widenToEmpty) {
+      expression += `.or(z.literal(${emptyValue.literal}))`;
+    }
+    expression += `.default(${emptyValue.literal})`;
+  } else {
     expression += '.optional()';
   }
 
   lines.push(`  ${propertyKey(propertyName)}: ${expression},`);
   return lines;
+};
+
+/**
+ * Emit the creation/update schemas for one table.
+ *
+ * Deliberately built from their own literal rather than derived from the read
+ * schema. Deriving would carry the read schema's defaults onto the write path,
+ * where they are actively harmful: an update payload that mentions one field
+ * would arrive at Airtable carrying `''` and `false` for every other, blanking
+ * cells the caller never touched. `.partial()` does not save us either — it
+ * strips defaults on Zod 3 and keeps them on Zod 4, so the same code would
+ * corrupt data on one major only.
+ */
+export const generateTableWritableZodSchema = (table: AirtableTable): string => {
+  const schemaName = generateSchemaName(table.name);
+  const typeBase = schemaName.replace(/Schema$/, '');
+  const propertyNames = resolvePropertyNames(table, true);
+  const lines: string[] = [];
+
+  lines.push('/**');
+  lines.push(` * Writable fields of "${sanitizeComment(table.name)}".`);
+  lines.push(' * Computed fields are excluded, and nothing is defaulted: a write must carry');
+  lines.push(' * exactly what the caller set.');
+  lines.push(' */');
+  lines.push(`export const ${typeBase}WritableSchema = z.object({`);
+
+  table.fields
+    .filter((field) => !enrichFieldMetadata(field).isReadonly)
+    .forEach((field) => {
+      const zodMapping = mapAirtableTypeToZod(field);
+      const comment = describe(field.description, zodMapping.description);
+      if (comment) {
+        lines.push(`  /** ${comment} */`);
+      }
+      lines.push(
+        `  ${propertyKey(propertyNames.get(field.id)!)}: ${zodMapping.expression}.optional(),`
+      );
+    });
+
+  lines.push('});');
+  lines.push('');
+  lines.push('// Creation payload: writable fields only, all optional.');
+  lines.push(`export const ${typeBase}CreationSchema = ${typeBase}WritableSchema;`);
+  lines.push(`export type ${typeBase}Creation = z.infer<typeof ${typeBase}CreationSchema>;`);
+  lines.push('');
+  lines.push('// Update payload: the same fields, plus the record being updated.');
+  lines.push(
+    `export const ${typeBase}UpdateSchema = ${typeBase}WritableSchema.extend({ record_id: z.string().optional() });`
+  );
+  lines.push(`export type ${typeBase}Update = z.infer<typeof ${typeBase}UpdateSchema>;`);
+
+  return lines.join('\n');
 };
 
 export const generateTableZodSchema = (
@@ -66,31 +123,12 @@ export const generateTableZodSchema = (
     lines.push('  /** Unique Airtable record ID */');
     lines.push('  record_id: z.string(),');
 
-    const propertyNames = new Set<string>();
-    propertyNames.add('record_id');
+    const propertyNames = resolvePropertyNames(table, true);
 
     table.fields.forEach((field) => {
-      let propertyName = generatePropertyName(field.name);
-
-      // Handle property name conflicts
-      if (propertyNames.has(propertyName) || propertyName === 'id') {
-        if (propertyName === 'id') {
-          if (field.type === 'autoNumber') {
-            propertyName = 'auto_id';
-          } else if (field.type === 'number') {
-            propertyName = 'field_id'; // Different from record_id
-          } else {
-            propertyName = `id_${field.type}`;
-          }
-        } else {
-          propertyName = `${propertyName}_${field.type}`;
-        }
-      }
-      propertyNames.add(propertyName);
-
       // Add empty line before property for readability
       lines.push('');
-      lines.push(...emitFieldEntry(field, propertyName));
+      lines.push(...emitFieldEntry(field, propertyNames.get(field.id)!));
     });
 
     lines.push('});');
@@ -101,28 +139,14 @@ export const generateTableZodSchema = (
     // First, generate the Fields schema
     lines.push(`const ${fieldsSchemaName} = z.object({`);
 
-    const propertyNames = new Set<string>();
+    const propertyNames = resolvePropertyNames(table, false);
 
     table.fields.forEach((field, index) => {
-      let propertyName = generatePropertyName(field.name);
-
-      // Handle property name conflicts
-      if (propertyNames.has(propertyName)) {
-        if (field.type === 'autoNumber') {
-          propertyName = 'auto_id';
-        } else if (field.type === 'number' && propertyName === 'id') {
-          propertyName = 'record_id';
-        } else {
-          propertyName = `${propertyName}_${field.type}`;
-        }
-      }
-      propertyNames.add(propertyName);
-
       // Add empty line before property if we have previous fields
       if (index > 0) {
         lines.push('');
       }
-      lines.push(...emitFieldEntry(field, propertyName));
+      lines.push(...emitFieldEntry(field, propertyNames.get(field.id)!));
     });
 
     lines.push('});');
@@ -184,20 +208,12 @@ export const generateUtilityZodTypes = (
     })
     .join('\n\n');
 
-  // Only in flattened mode, provide creation/update helpers based on flat schema shape
+  // Only in flattened mode, provide creation/update schemas for write payloads.
   const helpersBlock = flatten
-    ? '\n' +
-      schema.tables
-        .map((table) => {
-          const schemaName = generateSchemaName(table.name);
-          const typeBase = generateSchemaName(table.name).replace(/Schema$/, '');
-          return `// Creation schema excludes readonly fields and record_id\nexport const ${typeBase}CreationSchema = createCreationSchema(${schemaName}, [...${typeBase}ReadonlyFields, 'record_id']);\nexport type ${typeBase}Creation = z.infer<typeof ${typeBase}CreationSchema>;\n\n// Update schema allows partial updates\nexport const ${typeBase}UpdateSchema = createUpdateSchema(${schemaName});\nexport type ${typeBase}Update = z.infer<typeof ${typeBase}UpdateSchema>;`;
-        })
-        .join('\n\n')
+    ? '\n' + schema.tables.map(generateTableWritableZodSchema).join('\n\n')
     : '';
 
   const base = `
-${flatten ? "import { createUpdateSchema, createCreationSchema } from 'airtable-types-gen/runtime';\n" : ''}
 /**
  * Union type of all available table names
  */
