@@ -123,15 +123,15 @@ structure; **flattened** (`--flatten`) lifts every field to the root.
  * @description Users table from Airtable
  */
 interface UsersRecordFields {
-  Name: string;
-  Email: string;
-  Age: number;
-  Active: boolean;
-  Role: "Admin" | "User" | "Guest";
+  Name?: string;
+  Email?: string;
+  Age?: number;
+  Active?: boolean;
+  Role?: "Admin" | "User" | "Guest";
   /** 🔒 Computed by Airtable - readonly ISO date string */
-  readonly Created: string;
+  readonly Created?: string;
   /** 🔒 Computed by Airtable - auto-incrementing number */
-  readonly ["Auto ID"]: number;
+  readonly ["Auto ID"]?: number;
 }
 
 export interface UsersRecord {
@@ -150,13 +150,18 @@ export interface UsersRecord {
 export interface UsersRecord {
   /** Unique Airtable record ID */
   record_id: string;
-  Name: string;
-  Email: string;
-  readonly Created: string;
+  Name?: string;
+  Email?: string;
+  readonly Created?: string;
 }
 ```
 
 Note the record ID is `id` in native mode and `record_id` in flattened mode.
+
+**Every field is optional.** Airtable omits empty cells from its responses
+entirely, so raw payloads guarantee no field at all. These interfaces describe
+that raw data. The Zod schemas describe what comes back out of `.parse()`, where
+some of those fields are restored — see [Zod specifics](#zod-specifics).
 
 ### Utility Types
 
@@ -241,6 +246,32 @@ const oneUser: UsersRecord = flattenRecord<UsersRecord>(record);
 // table interfaces (e.g., UsersRecord) to match the flattened shape.
 ```
 
+### Validating SDK records (`toRawRecord`)
+
+Generated schemas describe the shape the **REST API** returns —
+`{ id, createdTime, fields }`. The `airtable` SDK does not hand that back: its
+`Record` exposes `id` and `fields`, but keeps `createdTime` on the undocumented
+`_rawJson`. Validating an SDK record directly therefore always fails on
+`createdTime`.
+
+`toRawRecord` rebuilds the wire shape so you never have to reach into `_rawJson`
+yourself:
+
+```typescript
+import { toRawRecord, toRawRecords } from 'airtable-types-gen/runtime';
+import { UsersSchema } from './schemas';
+
+const record = await base('Users').find('recXXXXXXXX');
+const user = UsersSchema.parse(toRawRecord(record));
+
+const records = await base('Users').select().all();
+const users = toRawRecords(records).map((raw) => UsersSchema.parse(raw));
+```
+
+Not needed in flattened mode: the flattened schema is keyed on `record_id` plus
+fields and carries no creation time, so `flattenRecord` already produces a
+matching object.
+
 ### Advanced Usage
 
 ```typescript
@@ -303,9 +334,69 @@ if (result.success) {
 
 ### Zod specifics
 
-- Computed fields are marked `.readonly()`. They are additionally `.optional()`
-  unless Airtable always populates them (`autoNumber`, `createdTime`,
-  `lastModifiedTime`). Writable fields are required.
+#### Sparse payloads
+
+Airtable never sends an empty cell. It drops the key, and
+[documents](https://airtable.com/developers/web/api/list-records) which values
+count as empty:
+
+> Returned records do not include any fields with 'empty' values, e.g. `""`,
+> `[]`, or `false`.
+
+Note `false`: an unchecked box is not sent as `false`, it is not sent at all. So
+**no field is guaranteed to arrive**, and every generated field schema accepts
+its absence.
+
+For the types in that quote the omission is not missing information — it *is*
+the value, compressed. Those fields get `.default(...)`, so parsing restores what
+Airtable erased and the parsed field is not optional:
+
+| Emitted             | Field types                                                                                            |
+| ------------------- | ------------------------------------------------------------------------------------------------------ |
+| `.default('')`      | `singleLineText` `multilineText` `richText` `email` `url` `phoneNumber`                                  |
+| `.default([])`      | `multipleSelects` `multipleAttachments` `multipleRecordLinks` `multipleCollaborators` `lookup` `multipleLookupValues` |
+| `.default(false)`   | `checkbox`                                                                                               |
+| `.optional()`       | everything else                                                                                          |
+
+Everything else stays optional because the omission carries no known value: `0`
+is not in Airtable's list, so an absent number is genuinely unknown rather than
+zero, an absent date is not the epoch, and an absent single-select is not the
+first choice.
+
+```typescript
+const user = UsersSchema.parse({
+  id: "recABC",
+  createdTime: "2026-08-15T10:00:00.000Z",
+  fields: { Name: "Ada" }, // everything else is empty, so Airtable omitted it
+});
+
+user.fields.Name;     // string   — no guard needed
+user.fields.Notes;    // string   — restored to ''
+user.fields.Active;   // boolean  — restored to false
+user.fields.Projects; // string[] — restored to []
+user.fields.Age;      // number | undefined — an absent number is not 0
+```
+
+`email`, `url` and `phoneNumber` also accept `''` explicitly (`.or(z.literal(''))`),
+since their own validation would otherwise reject the value the default hands
+back.
+
+#### Writing records
+
+The creation and update schemas are built from a separate, defaults-free shape:
+
+```typescript
+UsersUpdateSchema.parse({ Name: "Ada" }); // → { Name: 'Ada' }, nothing else
+```
+
+Do **not** rebuild them with `createUpdateSchema`/`createCreationSchema` from
+`airtable-types-gen/runtime` (both deprecated). Those apply `.partial()` to the
+read schema, which keeps defaults on Zod 4 and drops them on Zod 3 — so the same
+update payload blanks untouched cells on one major only.
+
+#### Other notes
+
+- Computed fields are marked `.readonly()`.
 - The inferred type exported next to each schema is `z.infer<typeof ...>`.
 - In flattened Zod output (`--flatten`), the generated file also re-exports
   `flattenRecord`, and adds per-table `…CreationSchema` / `…UpdateSchema`
@@ -421,7 +512,7 @@ Handles edge cases gracefully:
 ### Type Safety
 
 - Union types for single/multiple select fields
-- Optional properties for computed fields that may be undefined
+- Optional properties throughout, matching Airtable's sparse payloads
 - Proper typing for attachments, linked records, and user fields
 
 ## Development

@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import {
   detectComputedField,
-  isAlwaysPresentComputed,
   mapAirtableTypeToTSEnhanced,
   generateInterfaceName,
   generatePropertyName,
+  resolvePropertyNames,
 } from '../../src/generator/schema';
 import { AirtableField } from '../../src/types';
 
@@ -33,23 +33,64 @@ describe('detectComputedField', () => {
   });
 });
 
-describe('isAlwaysPresentComputed', () => {
-  it('should identify always present computed types', () => {
-    const alwaysPresentTypes = ['autoNumber', 'createdTime', 'lastModifiedTime'];
-
-    alwaysPresentTypes.forEach((type) => {
-      const field: AirtableField = { id: 'test', name: 'Test', type };
-      expect(isAlwaysPresentComputed(field)).toBe(true);
-    });
+describe('resolvePropertyNames', () => {
+  const table = (fields: AirtableField[]) => ({
+    id: 'tbl',
+    name: 'T',
+    primaryFieldId: fields[0]?.id ?? 'f1',
+    fields,
+    views: [],
   });
 
-  it('should identify always present field names', () => {
-    const alwaysPresentNames = ['airtable_id', 'id', 'ID', 'Airtable_ID'];
+  it('keeps field names that need no disambiguation', () => {
+    const resolved = resolvePropertyNames(
+      table([
+        { id: 'f1', name: 'Name', type: 'singleLineText' },
+        { id: 'f2', name: 'Email', type: 'email' },
+      ]),
+      false
+    );
 
-    alwaysPresentNames.forEach((name) => {
-      const field: AirtableField = { id: 'test', name, type: 'singleLineText' };
-      expect(isAlwaysPresentComputed(field)).toBe(true);
-    });
+    expect(resolved.get('f1')).toBe('Name');
+    expect(resolved.get('f2')).toBe('Email');
+  });
+
+  it('moves a field called "id" out of the way in the flattened shape', () => {
+    const resolved = resolvePropertyNames(
+      table([{ id: 'f1', name: 'id', type: 'number' }]),
+      true
+    );
+
+    // `record_id` already holds the record's own id in flattened output.
+    expect(resolved.get('f1')).toBe('field_id');
+  });
+
+  it('suffixes a duplicate name with its type', () => {
+    const resolved = resolvePropertyNames(
+      table([
+        { id: 'f1', name: 'Status', type: 'singleLineText' },
+        { id: 'f2', name: 'Status', type: 'checkbox' },
+      ]),
+      false
+    );
+
+    expect(resolved.get('f1')).toBe('Status');
+    expect(resolved.get('f2')).toBe('Status_checkbox');
+  });
+
+  it('resolves both emitters to the same names', () => {
+    // A mismatch would emit a schema whose keys do not match the interface.
+    const fields: AirtableField[] = [
+      { id: 'f1', name: 'Status', type: 'singleLineText' },
+      { id: 'f2', name: 'Status', type: 'checkbox' },
+      { id: 'f3', name: 'id', type: 'autoNumber' },
+    ];
+
+    expect([...resolvePropertyNames(table(fields), true).values()]).toEqual([
+      'Status',
+      'Status_checkbox',
+      'auto_id',
+    ]);
   });
 });
 

@@ -25,9 +25,10 @@ describe('generateTypes integration', () => {
 
     expect(result.content).toContain('export interface UsersRecord');
     expect(result.content).toContain('export interface ProjectsRecord');
-    // TS output aligns with Zod semantics (no readonly/optional markers); verify fields exist
-    expect(result.content).toContain('Created: string;');
-    expect(result.content).toContain('["Auto ID"]: number;');
+    // Every field is optional: Airtable omits empty cells, so raw payloads
+    // guarantee nothing. See tests/unit/emitter-alignment.test.ts.
+    expect(result.content).toContain('Created?: string;');
+    expect(result.content).toContain('["Auto ID"]?: number;');
     expect(result.content).toContain('"Admin" | "User" | "Guest"');
     expect(result.content).toContain('Array<"Planning" | "In Progress" | "Completed">');
     expect(result.schema).toEqual(mockAirtableSchema);

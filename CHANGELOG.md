@@ -5,6 +5,86 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-08-15
+
+Fixes [#2](https://github.com/Guischk/airtable-types-gen/issues/2): generated
+schemas rejected most real Airtable records.
+
+### 💥 Breaking
+
+- **Generated schemas now accept the sparse payloads Airtable actually sends.**
+  Airtable omits every empty cell and
+  [documents](https://airtable.com/developers/web/api/list-records) `""`, `[]`
+  and `false` as empty — so an unchecked box is not sent as `false`, it is not
+  sent at all. The generator marked writable fields required, so a single empty
+  cell made `.parse()` throw. No field is required any more.
+
+  Where Airtable's omission encodes a known value, parsing restores it and the
+  parsed field stays non-optional — **so most consuming code does not change**:
+
+  | Emitted           | Field types                                                                                                          |
+  | ----------------- | -------------------------------------------------------------------------------------------------------------------- |
+  | `.default('')`    | `singleLineText` `multilineText` `richText` `email` `url` `phoneNumber`                                                |
+  | `.default([])`    | `multipleSelects` `multipleAttachments` `multipleRecordLinks` `multipleCollaborators` `lookup` `multipleLookupValues`  |
+  | `.default(false)` | `checkbox`                                                                                                            |
+  | `.optional()`     | everything else                                                                                                       |
+
+  **What to migrate**: the 14 types that go from required to optional and now
+  need a guard — `number` `currency` `percent` `rating` `duration` `date`
+  `dateTime` `singleSelect` `singleCollaborator` `barcode` `button` `autoNumber`
+  `createdTime` `lastModifiedTime`. `lookup` and `multipleLookupValues` move the
+  other way, from optional to guaranteed, which needs no change.
+
+- **`--typescript-only` interfaces mark every field `?`.** That mode has no parse
+  step, so its interfaces describe raw Airtable data, where nothing is
+  guaranteed. The Zod output describes what leaves `.parse()`. The two emitters
+  now derive their optionality from one shared source and a test asserts they
+  agree.
+
+- **`ALWAYS_PRESENT_COMPUTED_TYPES` is gone**, along with the exported
+  `isAlwaysPresentComputed`. Airtable documents no guarantee that a
+  `lastModifiedTime` watching specific fields stays populated, so the list was a
+  bet on undocumented behaviour — and being wrong about presence breaks parsing,
+  while being wrong about absence costs a `?.`.
+
+- **`…CreationSchema` and `…UpdateSchema` are emitted as their own literals**,
+  built from a new `…WritableSchema` that carries no defaults. Previously they
+  were derived from the read schema through the runtime helpers.
+
+### ✨ Added
+
+- **`toRawRecord` / `toRawRecords`** in `airtable-types-gen/runtime`. The
+  `airtable` SDK's `Record` exposes `id` and `fields` but keeps `createdTime` on
+  the undocumented `_rawJson`, so an SDK record could never satisfy a
+  native-mode schema. These rebuild the wire shape without consumers having to
+  touch a private field.
+
+- **`resolvePropertyNames`** in the generator, replacing four copies of the
+  field-name disambiguation logic. A drift between copies would have emitted a
+  schema whose keys did not match the interface describing it.
+
+### 🐛 Fixed
+
+- **`createUpdateSchema` could blank cells on Zod 4 only.** `.partial()` strips
+  defaults on Zod 3 and keeps applying them on Zod 4, so an update payload
+  naming one field arrived at Airtable carrying empty values for all the others.
+  Both it and `createCreationSchema` are now `@deprecated` in favour of the
+  generated schemas; they remain exported. Recorded in `KNOWN_ISSUES.md`.
+
+- **Generated schemas now accept their own output.** `.parse()` produced `''`
+  for text fields that `z.string().email()` would then reject on re-parse. The
+  validated string types accept `''` explicitly.
+
+### 📚 Documentation
+
+- The README's optionality section is rewritten around what Airtable documents,
+  with the per-type table above. The claim that *"All field schemas are marked
+  with `.optional()`"*, introduced in the v0.3.0 release under a heading naming a
+  never-released v0.2.2, described behaviour the code never had; 0.5.0 removed
+  the claim, and 0.6.0 implements it properly.
+- `CONTEXT.md` records the vocabulary this fix turned on — wire format, empty
+  value, absent-able field, read path vs write path.
+
 ## [0.5.0] - 2026-08-15
 
 ### 💥 Breaking

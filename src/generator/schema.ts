@@ -1,4 +1,4 @@
-import { AirtableBaseSchema, AirtableField, TypeMappingResult } from '../types.js';
+import { AirtableBaseSchema, AirtableField, AirtableTable, TypeMappingResult } from '../types.js';
 
 // Types de champs calculés par Airtable (readonly)
 const COMPUTED_FIELD_TYPES = [
@@ -14,25 +14,8 @@ const COMPUTED_FIELD_TYPES = [
   'aiText',
 ] as const;
 
-// Types de champs computed qui sont TOUJOURS présents (jamais undefined)
-const ALWAYS_PRESENT_COMPUTED_TYPES = ['autoNumber', 'createdTime', 'lastModifiedTime'] as const;
-
-// Champs spéciaux qui sont toujours présents selon leur nom
-const ALWAYS_PRESENT_FIELD_NAMES = ['airtable_id', 'id'] as const;
-
 export const detectComputedField = (field: AirtableField): boolean => {
   return COMPUTED_FIELD_TYPES.includes(field.type as any);
-};
-
-export const isAlwaysPresentComputed = (field: AirtableField): boolean => {
-  if (ALWAYS_PRESENT_COMPUTED_TYPES.includes(field.type as any)) {
-    return true;
-  }
-
-  // Exact match only. A substring match here made every field whose name merely
-  // contains "id" — Paid, Video, Valid — non-optional in the generated output.
-  const fieldNameLower = field.name.toLowerCase();
-  return ALWAYS_PRESENT_FIELD_NAMES.some((name) => fieldNameLower === name);
 };
 
 export const enrichFieldMetadata = (field: AirtableField): AirtableField => {
@@ -290,4 +273,60 @@ export const generateInterfaceName = (tableName: string): string =>
 
 export const generatePropertyName = (fieldName: string): string => {
   return fieldName;
+};
+
+/**
+ * Property name for every field of a table, disambiguated across the table.
+ *
+ * Airtable lets two fields share a name once punctuation is stripped, and lets a
+ * field be called `id` next to the record's own `id`. Both need renaming, and
+ * both emitters plus the writable-schema emitter must land on the *same* new
+ * name — a mismatch would silently emit a schema whose keys do not line up with
+ * the interface describing it. Hence one resolver rather than a copy per site.
+ *
+ * Keyed by field id, since the field name is exactly what may be rewritten.
+ */
+export const resolvePropertyNames = (
+  table: AirtableTable,
+  flatten: boolean
+): Map<string, string> => {
+  const used = new Set<string>();
+  const resolved = new Map<string, string>();
+
+  if (flatten) {
+    used.add('record_id');
+  }
+
+  for (const field of table.fields) {
+    let propertyName = generatePropertyName(field.name);
+
+    if (flatten) {
+      // The flattened shape puts fields next to `record_id`, so a field called
+      // `id` has to move even when nothing else claims that name.
+      if (used.has(propertyName) || propertyName === 'id') {
+        if (propertyName === 'id') {
+          propertyName =
+            field.type === 'autoNumber'
+              ? 'auto_id'
+              : field.type === 'number'
+                ? 'field_id'
+                : `id_${field.type}`;
+        } else {
+          propertyName = `${propertyName}_${field.type}`;
+        }
+      }
+    } else if (used.has(propertyName)) {
+      propertyName =
+        field.type === 'autoNumber'
+          ? 'auto_id'
+          : field.type === 'number' && propertyName === 'id'
+            ? 'record_id'
+            : `${propertyName}_${field.type}`;
+    }
+
+    used.add(propertyName);
+    resolved.set(field.id, propertyName);
+  }
+
+  return resolved;
 };
