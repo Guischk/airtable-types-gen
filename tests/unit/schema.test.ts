@@ -34,6 +34,11 @@ describe('detectComputedField', () => {
     expect(detectComputedField(field)).toBe(true);
   });
 
+  it('should detect button, which Airtable renders and never accepts on a write', () => {
+    const field: AirtableField = { id: 'test', name: 'Open', type: 'button' };
+    expect(detectComputedField(field)).toBe(true);
+  });
+
   it('should not detect non-computed field types as computed', () => {
     const nonComputedTypes = ['singleLineText', 'number', 'checkbox', 'email'];
 

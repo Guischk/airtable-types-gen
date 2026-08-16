@@ -27,21 +27,23 @@ const ATTACHMENT_EXPRESSION =
   'size: z.number().positive(), type: z.string() })';
 
 /**
- * A collaborator is addressed on a write by `id` *or* `email`, never both, and
- * `name` is never sent at all.
+ * A collaborator is addressed on a write by `id` or by `email`. Which one is
+ * the caller's choice, so both are optional here rather than an exclusive
+ * union, and `name` — which Airtable ignores on a write — is tolerated rather
+ * than rejected.
  */
 const WRITE_USER_EXPRESSION =
   'z.object({ id: z.string().optional(), email: z.string().email().optional(), ' +
   'name: z.string().optional() })';
 
 /**
- * Composite cells whose write shape is narrower than what comes back.
+ * Composite cells a caller sends in less detail than they come back in.
  *
  * Airtable fills most of these in for you: an attachment is uploaded from a
  * `url` and gains its id, size and type on the next read; a barcode's `type` is
  * optional. Reusing the read expression on the write path therefore rejects
- * payloads Airtable accepts — the read shape describes what *comes back*, not
- * what you may send. Every other type sends what it returns, so it falls
+ * payloads Airtable accepts — the read expression describes what *comes back*,
+ * not what you may send. Every other type sends what it returns, so it falls
  * through to `mapAirtableTypeToZod` unchanged.
  */
 const WRITE_EXPRESSIONS: Record<string, string> = {

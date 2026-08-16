@@ -22,6 +22,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   read path and no longer appear on the write path. If you were assigning to one,
   it was never going to reach Airtable.
 
+- **A `tables` selection matching nothing now throws instead of emitting a
+  module that does not parse.** `export type AirtableTableName = ;`, previously
+  with exit code 0 from the CLI. `generateFromSchema` throws
+  `NoMatchingTablesError`; the CLI reports the unmatched names and exits 1. A
+  *partial* match is untouched — it is a narrowing, not a mistake.
+
 - **`--separate-files --typescript-only` output changed.** The multi-file index
   carried a hand-written subset of the utility types, so a base generated that
   way was missing `CreateRecord`, `UpdateRecord`, `ReadRecord` and
@@ -57,10 +63,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `email`. `mapAirtableTypeToZodWrite` now narrows those four types, on the write
   path only. This also corrects the flattened write schemas, which carried the
   same defect since 0.6.0.
-
-- **`--tables` matching nothing emitted a module that does not parse.**
-  `export type AirtableTableName = ;`, with exit code 0. The CLI now fails with
-  the unmatched names, and warns when only some are unknown.
 
 - **The native structure had no write-path schemas, so writes were derived from
   the read type.** `.default('')` means "optional in, guaranteed out", and

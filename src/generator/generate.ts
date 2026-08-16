@@ -60,10 +60,31 @@ export interface SeparateFilesOutput {
 
 export type GeneratedOutput = SingleFileOutput | SeparateFilesOutput;
 
-const selectTables = (schema: AirtableBaseSchema, tables?: string[]): AirtableBaseSchema =>
-  tables && tables.length > 0
-    ? { tables: schema.tables.filter((table) => tables.includes(table.name)) }
-    : schema;
+/** Thrown when `tables` names nothing in the schema. */
+export class NoMatchingTablesError extends Error {
+  constructor(public readonly requested: string[]) {
+    super(`No table in this base matches: ${requested.join(', ')}`);
+    this.name = 'NoMatchingTablesError';
+  }
+}
+
+const selectTables = (schema: AirtableBaseSchema, tables?: string[]): AirtableBaseSchema => {
+  if (!tables || tables.length === 0) {
+    return schema;
+  }
+
+  const selected = schema.tables.filter((table) => tables.includes(table.name));
+
+  // Emitting zero tables produces `export type AirtableTableName = ;`, which
+  // does not parse. A filter matching nothing is a mistake, not a request for
+  // an empty module — and the check belongs here rather than in the CLI, or
+  // every other caller of this function keeps the defect.
+  if (selected.length === 0) {
+    throw new NoMatchingTablesError(tables);
+  }
+
+  return { tables: selected };
+};
 
 const generateSingleFile = (
   schema: AirtableBaseSchema,

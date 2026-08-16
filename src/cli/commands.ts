@@ -1,5 +1,5 @@
 import * as fs from 'fs/promises';
-import { generateFromSchema } from '../generator/generate.js';
+import { generateFromSchema, NoMatchingTablesError } from '../generator/generate.js';
 import { writeMultipleFiles } from '../generator/multi-file.js';
 import { fetchBaseSchema } from '../generator/schema.js';
 import { OutputFormat } from '../types.js';
@@ -39,20 +39,6 @@ export const executeGenerate = async (options: CliOptions): Promise<void> => {
 
     const baseSchema = await fetchBaseSchema(baseId, token);
 
-    // An unmatched --tables used to generate an empty module: `export type
-    // AirtableTableName = ;` does not parse, and the CLI still exited 0.
-    if (options.tables && options.tables.length > 0) {
-      const known = new Set(baseSchema.tables.map((table) => table.name));
-      const missing = options.tables.filter((name) => !known.has(name));
-      if (missing.length === options.tables.length) {
-        console.error(`Error: --tables matched no table in this base: ${missing.join(', ')}`);
-        process.exit(1);
-      }
-      if (missing.length > 0) {
-        console.error(`[Generator] --tables: no table named ${missing.join(', ')}`);
-      }
-    }
-
     const result = generateFromSchema({
       schema: baseSchema,
       format,
@@ -66,6 +52,13 @@ export const executeGenerate = async (options: CliOptions): Promise<void> => {
     if (result.schema.tables.length < baseSchema.tables.length) {
       console.error(
         `[Generator] Filtered to ${result.schema.tables.length} of ${baseSchema.tables.length} tables`
+      );
+    }
+
+    // Counted, not re-matched: the matching rule lives in `selectTables`.
+    if (options.tables && result.schema.tables.length < options.tables.length) {
+      console.error(
+        `[Generator] --tables: only ${result.schema.tables.length} of ${options.tables.length} names matched`
       );
     }
 
@@ -98,6 +91,10 @@ export const executeGenerate = async (options: CliOptions): Promise<void> => {
       console.error(`   - ${table.name} (${table.fields.length} fields)`);
     });
   } catch (error) {
+    if (error instanceof NoMatchingTablesError) {
+      console.error(`Error: --tables matched no table in this base: ${error.requested.join(', ')}`);
+      process.exit(1);
+    }
     console.error('Error generating types:', error);
     process.exit(1);
   }

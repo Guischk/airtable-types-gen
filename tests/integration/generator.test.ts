@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { generateTypes } from '../../src/generator/generate';
+import { generateTypes, generateFromSchema, NoMatchingTablesError } from '../../src/generator/generate';
 import { mockAirtableSchema } from '../fixtures/mock-schema';
 
 // Mock the fetch function
@@ -152,5 +152,33 @@ describe('generateTypes integration', () => {
     // Check table mapping
     expect(result.content).toContain('"Users": UsersRecord;');
     expect(result.content).toContain('"Projects": ProjectsRecord;');
+  });
+
+  /**
+   * Zero tables emits `export type AirtableTableName = ;`, which does not
+   * parse, and the CLI used to exit 0 on it. The rule lives at the seam so that
+   * every caller gets it, not only the CLI.
+   */
+  describe('an unmatched --tables selection', () => {
+    const schema = {
+      tables: [
+        { id: 'tbl1', name: 'Users', primaryFieldId: 'f1', views: [], fields: [] },
+      ],
+    };
+
+    it('throws rather than emitting a module that does not parse', () => {
+      expect(() => generateFromSchema({ schema, tables: ['Typo'] })).toThrow(NoMatchingTablesError);
+      expect(() => generateFromSchema({ schema, tables: ['Typo'] })).toThrow(/Typo/);
+    });
+
+    it('keeps a partial match, which is a narrowing rather than a mistake', () => {
+      const result = generateFromSchema({ schema, tables: ['Users', 'Typo'] });
+      expect(result.schema.tables.map((t) => t.name)).toEqual(['Users']);
+    });
+
+    it('leaves an empty or absent selection alone', () => {
+      expect(generateFromSchema({ schema, tables: [] }).schema.tables).toHaveLength(1);
+      expect(generateFromSchema({ schema }).schema.tables).toHaveLength(1);
+    });
   });
 });
