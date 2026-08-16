@@ -34,7 +34,20 @@ const ATTACHMENT_EXPRESSION =
  */
 const WRITE_USER_EXPRESSION =
   'z.object({ id: z.string().optional(), email: z.string().email().optional(), ' +
-  'name: z.string().optional() })';
+  'name: z.string().optional() })' +
+  '.refine((value) => value.id !== undefined || value.email !== undefined, ' +
+  '"Address a collaborator by id or email")';
+
+/**
+ * An attachment is written either by uploading from a `url` or by passing back
+ * the `id` of one already there. Airtable assigns the rest — size, type, and
+ * the filename when it is not given — so only that choice is enforced.
+ */
+const WRITE_ATTACHMENT_EXPRESSION =
+  'z.object({ id: z.string().optional(), url: z.string().url().optional(), ' +
+  'filename: z.string().optional() })' +
+  '.refine((value) => value.id !== undefined || value.url !== undefined, ' +
+  '"Provide an attachment url to upload, or an id to keep")';
 
 /**
  * Composite cells a caller sends in less detail than they come back in.
@@ -47,9 +60,7 @@ const WRITE_USER_EXPRESSION =
  * through to `mapAirtableTypeToZod` unchanged.
  */
 const WRITE_EXPRESSIONS: Record<string, string> = {
-  multipleAttachments:
-    'z.array(z.object({ id: z.string().optional(), url: z.string().url().optional(), ' +
-    'filename: z.string().optional() }))',
+  multipleAttachments: `z.array(${WRITE_ATTACHMENT_EXPRESSION})`,
   singleCollaborator: WRITE_USER_EXPRESSION,
   multipleCollaborators: `z.array(${WRITE_USER_EXPRESSION})`,
   barcode: 'z.object({ text: z.string(), type: z.string().optional() })',

@@ -178,7 +178,7 @@ export const AIRTABLE_TABLE_NAMES = ["Users", "Projects"] as const;
 export type GetTableRecord<T extends AirtableTableName> = AirtableTableTypes[T];
 export type GetTableFields<T extends AirtableTableName> = GetTableRecord<T>["fields"];
 
-// CRUD operation types — native mode
+// CRUD operation types — the native structure
 export type CreateRecord<T extends AirtableTableName> = {
   fields: Partial<GetTableFields<T>>;
 };
@@ -270,7 +270,7 @@ const records = await base('Users').select().all();
 const users = toRawRecords(records).map((raw) => UsersSchema.parse(raw));
 ```
 
-Not needed in flattened mode: the flattened schema is keyed on `record_id` plus
+Not needed in the flattened structure: the flattened schema is keyed on `record_id` plus
 fields and carries no creation time, so `flattenRecord` already produces a
 matching object.
 
@@ -461,7 +461,7 @@ Example (flattened Zod + multi-file):
 
 ```ts
 import { UsersSchema, type UsersRecord, UsersReadonlyFields, UsersCreationSchema, UsersUpdateSchema } from './schemas';
-// You can also import flattenRecord directly from the generated index in flattened Zod mode
+// You can also import flattenRecord directly from the generated index in the flattened Zod structure
 import { flattenRecord } from './schemas';
 
 // Runtime validation with typed result

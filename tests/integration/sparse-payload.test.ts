@@ -222,6 +222,18 @@ describe.each(MAJORS)('Writable schemas never resurrect an empty value ($label)'
     it('still rejects a barcode with no text at all', () => {
       expect(schema().safeParse({ fields: { Code: { type: 'upce' } } }).success).toBe(false);
     });
+
+    // Widening the write shape must not widen it to "anything": an attachment
+    // with neither a url to upload nor an id to keep, and a collaborator with
+    // no way to name who, are payloads Airtable cannot act on either.
+    it.each([
+      ['an attachment identifying nothing', { Files: [{}] }],
+      ['an attachment with only a filename', { Files: [{ filename: 'a.pdf' }] }],
+      ['a collaborator identifying nobody', { Collab: {} }],
+      ['a collaborator given only a name', { Collab: { name: 'Ada' } }],
+    ])('rejects %s', (_label, fields) => {
+      expect(schema().safeParse({ fields }).success).toBe(false);
+    });
   });
 
   describe('native', () => {
