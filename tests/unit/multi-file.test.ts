@@ -6,7 +6,7 @@ import {
   generateTableFileName,
   generateSingleTableFile,
   generateIndexFile,
-  generateMultipleFiles,
+  generateSeparateFiles,
   writeMultipleFiles,
 } from '../../src/generator/multi-file.js';
 import { mockSchema, mockTable } from '../fixtures/mock-schema.js';
@@ -129,40 +129,39 @@ describe('Multi-File Generator', () => {
     });
   });
 
-  describe('generateMultipleFiles', () => {
-    it('should generate multiple files for TypeScript', async () => {
+  describe('generateSeparateFiles', () => {
+    it('should generate multiple files for TypeScript', () => {
       const singleTableSchema = { tables: [mockTable] };
-      const result = await generateMultipleFiles(singleTableSchema, tempDir, {
+      const files = generateSeparateFiles(singleTableSchema, {
         format: 'typescript',
         flatten: false,
       });
 
-      expect(result.files).toHaveProperty('users.ts');
-      expect(result.files).toHaveProperty('index.ts');
-      expect(Object.keys(result.files)).toHaveLength(2);
+      expect(files).toHaveProperty('users.ts');
+      expect(files).toHaveProperty('index.ts');
+      expect(Object.keys(files)).toHaveLength(2);
 
-      expect(result.files['users.ts']).toContain('export interface UsersRecord');
-      expect(result.files['index.ts']).toContain('export type { UsersRecord }');
-      expect(result.indexContent).toContain('export type { UsersRecord }');
+      expect(files['users.ts']).toContain('export interface UsersRecord');
+      expect(files['index.ts']).toContain('export type { UsersRecord }');
     });
 
-    it('should generate multiple files for Zod', async () => {
+    it('should generate multiple files for Zod', () => {
       const singleTableSchema = { tables: [mockTable] };
-      const result = await generateMultipleFiles(singleTableSchema, tempDir, {
+      const files = generateSeparateFiles(singleTableSchema, {
         format: 'zod',
         flatten: false,
       });
 
-      expect(result.files).toHaveProperty('users.ts');
-      expect(result.files).toHaveProperty('index.ts');
-      expect(Object.keys(result.files)).toHaveLength(2);
+      expect(files).toHaveProperty('users.ts');
+      expect(files).toHaveProperty('index.ts');
+      expect(Object.keys(files)).toHaveLength(2);
 
-      expect(result.files['users.ts']).toContain('export const UsersSchema =');
-      expect(result.files['users.ts']).toContain('export type UsersRecord =');
-      expect(result.files['index.ts']).toContain('export { UsersSchema, type UsersRecord }');
+      expect(files['users.ts']).toContain('export const UsersSchema =');
+      expect(files['users.ts']).toContain('export type UsersRecord =');
+      expect(files['index.ts']).toContain('export { UsersSchema, type UsersRecord }');
     });
 
-    it('should handle multiple tables correctly', async () => {
+    it('should handle multiple tables correctly', () => {
       const multiTableSchema = {
         tables: [
           mockTable,
@@ -175,41 +174,54 @@ describe('Multi-File Generator', () => {
         ],
       };
 
-      const result = await generateMultipleFiles(multiTableSchema, tempDir, {
+      const files = generateSeparateFiles(multiTableSchema, {
         format: 'typescript',
         flatten: false,
       });
 
-      expect(result.files).toHaveProperty('users.ts');
-      expect(result.files).toHaveProperty('project-tasks.ts');
-      expect(result.files).toHaveProperty('index.ts');
-      expect(Object.keys(result.files)).toHaveLength(3);
+      expect(files).toHaveProperty('users.ts');
+      expect(files).toHaveProperty('project-tasks.ts');
+      expect(files).toHaveProperty('index.ts');
+      expect(Object.keys(files)).toHaveLength(3);
 
-      expect(result.files['project-tasks.ts']).toContain('ProjectTasksRecord');
+      expect(files['project-tasks.ts']).toContain('ProjectTasksRecord');
     });
 
-    it('should generate multiple files for TypeScript with flatten', async () => {
+    it('should generate multiple files for TypeScript with flatten', () => {
       const singleTableSchema = { tables: [mockTable] };
-      const result = await generateMultipleFiles(singleTableSchema, tempDir, {
+      const files = generateSeparateFiles(singleTableSchema, {
         format: 'typescript',
         flatten: true,
       });
 
-      expect(result.files['users.ts']).toContain('export interface UsersRecord');
-      expect(result.files['users.ts']).toContain('record_id: string');
-      expect(result.files['index.ts']).toContain('export type AirtableTableName =');
+      expect(files['users.ts']).toContain('export interface UsersRecord');
+      expect(files['users.ts']).toContain('record_id: string');
+      expect(files['index.ts']).toContain('export type AirtableTableName =');
     });
 
-    it('should generate multiple files for Zod with flatten', async () => {
+    it('should generate multiple files for Zod with flatten', () => {
       const singleTableSchema = { tables: [mockTable] };
-      const result = await generateMultipleFiles(singleTableSchema, tempDir, {
+      const files = generateSeparateFiles(singleTableSchema, {
         format: 'zod',
         flatten: true,
       });
 
-      expect(result.files['users.ts']).toContain('export const UsersSchema =');
-      expect(result.files['users.ts']).toContain('record_id: z.string()');
-      expect(result.files['index.ts']).toContain('export { UsersSchema, type UsersRecord }');
+      expect(files['users.ts']).toContain('export const UsersSchema =');
+      expect(files['users.ts']).toContain('record_id: z.string()');
+      expect(files['index.ts']).toContain('export { UsersSchema, type UsersRecord }');
+    });
+
+    it('should give the index the same utility types the single-file run emits', () => {
+      const files = generateSeparateFiles(
+        { tables: [mockTable] },
+        { format: 'typescript', flatten: false }
+      );
+
+      // These four used to be missing: the index carried a hand-written subset.
+      expect(files['index.ts']).toContain('export type CreateRecord<T extends AirtableTableName>');
+      expect(files['index.ts']).toContain('export type UpdateRecord<T extends AirtableTableName>');
+      expect(files['index.ts']).toContain('export type ReadRecord<T extends AirtableTableName>');
+      expect(files['index.ts']).toContain('export interface AirtableSelectOptions');
     });
   });
 
@@ -257,12 +269,12 @@ describe('Multi-File Generator', () => {
   describe('Integration: Full multi-file generation', () => {
     it('should generate and write complete multi-file structure', async () => {
       const singleTableSchema = { tables: [mockTable] };
-      const result = await generateMultipleFiles(singleTableSchema, tempDir, {
+      const generated = generateSeparateFiles(singleTableSchema, {
         format: 'zod',
         flatten: true,
       });
 
-      await writeMultipleFiles(tempDir, result.files);
+      await writeMultipleFiles(tempDir, generated);
 
       // Verify files exist
       const files = await fs.readdir(tempDir);

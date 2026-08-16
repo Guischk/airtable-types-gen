@@ -27,7 +27,7 @@ describe('stdout carries only generated output', () => {
     });
     vi.stubGlobal('fetch', async () => ({ ok: true, json: async () => mockAirtableSchema }));
 
-    const { generateTypes } = await import('../../src/generator/types.js');
+    const { generateTypes } = await import('../../src/generator/generate.js');
     await generateTypes({ baseId: 'appTest123', token: 'x', flatten: false, tables: ['Users'] });
 
     expect(writes.join('')).toBe('');

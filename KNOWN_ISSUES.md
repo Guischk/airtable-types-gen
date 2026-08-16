@@ -43,6 +43,39 @@ are built from a defaults-free shape and behave identically on both majors.
 introspection, which is Zod-3-only and was deliberately dropped in 0.5.0. They
 will be removed in a later release rather than fixed.
 
+## Flattened `…UpdateSchema` does not require the record id
+
+The native update schema requires `id`, since a PATCH without one cannot be
+applied. The flattened one still carries `record_id: z.string().optional()`,
+so it type-checks an update payload that identifies no record.
+
+**Impact**: flattened-mode callers only, and only as a missing guard — the
+payload fails at the API, not silently.
+
+**Workaround**: none needed beyond passing `record_id`.
+
+**Status**: open. Making it required is the right shape but breaks anyone
+currently building the payload in two steps, so it is deferred to a release that
+can carry that break rather than folded into the write-path fix.
+
+## `--typescript-only` has no write-path types
+
+The Zod output gained per-table `…WritableSchema` / `…CreationSchema` /
+`…UpdateSchema`, which exclude computed fields. The TypeScript output did not:
+its `CreateRecord<T>` is still `{ fields: Partial<GetTableFields<T>> }`, which
+includes the computed fields Airtable will not accept on a write.
+
+**Impact**: `--typescript-only` callers. Milder than the Zod defect it mirrors —
+that mode has no `.parse()`, so its interfaces already mark every field `?` and
+nothing is *required*; the type merely permits a field that will be rejected.
+
+**Workaround**: `CreatePayload<GetTableFields<'Users'>>` from
+`airtable-types-gen/runtime` strips the readonly properties.
+
+**Status**: open. Nothing holds the two emitters together on writability —
+`tests/unit/emitter-alignment.test.ts` covers omission only — so closing this
+means extending that invariant, not just editing the emitted text.
+
 ## Other Issues
 
 None currently known. If you encounter issues, please report them at:

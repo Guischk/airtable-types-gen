@@ -5,6 +5,105 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### 💥 Breaking
+
+- **`button` and `multipleLookupValues` are now recognised as computed.**
+  `COMPUTED_FIELD_TYPES` guarded only the spelling `lookup`, which the metadata
+  API does not actually return: in a real 752-field base `lookup` occurred **0**
+  times and `multipleLookupValues` **200** times, across 9 tables. Buttons were
+  missing outright. Both were therefore emitted as writable, and since this
+  release also emits write schemas for the native structure, they landed in
+  `…WritableSchema` / `…CreationSchema` / `…UpdateSchema` — where a payload
+  carrying one is rejected by Airtable.
+
+  **What to migrate**: lookup and button fields now carry `.readonly()` on the
+  read path and no longer appear on the write path. If you were assigning to one,
+  it was never going to reach Airtable.
+
+- **A `tables` selection matching nothing now throws instead of emitting a
+  module that does not parse.** `export type AirtableTableName = ;`, previously
+  with exit code 0 from the CLI. `generateFromSchema` throws
+  `NoMatchingTablesError`; the CLI reports the unmatched names and exits 1. A
+  *partial* match is untouched — it is a narrowing, not a mistake.
+
+- **`--separate-files --typescript-only` output changed.** The multi-file index
+  carried a hand-written subset of the utility types, so a base generated that
+  way was missing `CreateRecord`, `UpdateRecord`, `ReadRecord` and
+  `AirtableSelectOptions`, and spelled `GetTableFields` differently than the
+  single-file run of the same base. Both layouts now emit one block.
+
+  **What to migrate**: in the flattened structure the index no longer declares
+  `GetTableFields` — a flattened record has no `fields` member, so the type
+  resolved to the record itself and said nothing. Native keeps it. Also in the
+  flattened structure the index now re-exports `flattenRecord`, as single-file
+  output already did — which turns a previously type-only index into one
+  carrying a runtime import from `airtable-types-gen/runtime`.
+
+### ✨ Added
+
+- **`generateFromSchema`**, the entry point the CLI now goes through. It takes a
+  base schema — fetched however you like — plus `format`, `flatten`, `tables`
+  and `layout`, and returns the generated source: `content` for a single module,
+  `files` for one module per table. `fetchBaseSchema` is exported alongside it,
+  so programmatic use no longer has to hit the network on every call.
+  `generateTypes` is unchanged and still exported.
+
+- **`CreatePayload<T>`** in `airtable-types-gen/runtime`: writable properties
+  only, all optional. What `WritableOnly<T>` was mistaken for.
+
+### 🐛 Fixed
+
+- **Write schemas rejected legitimate composite payloads.** The write path
+  reused the *read* cell expression, so an attachment had to carry `id`,
+  `filename`, `size` and `type`, a collaborator both `id` and `email`, and a
+  barcode its `type` — none of which a caller sends. Airtable fills them in: an
+  attachment is uploaded from a `url`, a collaborator is addressed by `id` *or*
+  `email`. `mapAirtableTypeToZodWrite` now narrows those four types, on the write
+  path only. This also corrects the flattened write schemas, which carried the
+  same defect since 0.6.0.
+
+- **The native structure had no write-path schemas, so writes were derived from
+  the read type.** `.default('')` means "optional in, guaranteed out", and
+  `z.infer<>` is the output type — so every field 0.6.0 restores an empty value
+  for became **required** on the record type. Correct on read, fatal on write: a
+  create built from `UsersRecord` asked the caller for the whole table
+  (`Property 'record_id' is missing … and 35 more`). Verified identical on Zod
+  3.25 and 4.4; this is not a major-version divergence.
+
+  `…WritableSchema` / `…CreationSchema` / `…UpdateSchema` are now emitted in
+  **both** structures, not flattened-only. Native mirrors the body Airtable's
+  POST/PATCH actually takes:
+
+  ```ts
+  UsersCreationSchema.parse({ fields: { Name: 'Ada' } });
+  UsersUpdateSchema.parse({ id: 'rec1', fields: { Name: 'Ada' } });
+  ```
+
+  The read path is unchanged — `.default()` on restored fields is the behaviour
+  0.6.0 introduced deliberately, and reverting it would put a guard back on
+  every text field.
+
+### ⚠️ Deprecated
+
+- **`WritableOnly<T>`.** Its docstring advertised it for create operations, but
+  it strips `readonly` and nothing else, so guaranteed fields stay required — it
+  is the type that produced the error above. Use the generated `…CreationSchema`,
+  or the new `CreatePayload<T>` for a hand-written interface.
+
+### 🧹 Internal
+
+- The path from base schema to generated source existed in three copies (the
+  CLI, `generateTypes`, and the multi-file path), plus a fourth in the compile
+  tests, which is why the divergence above went unnoticed. It is one function
+  now, and the tests aim at it rather than re-assembling output themselves.
+
+- `generateMultipleFiles` became `generateSeparateFiles`: pure, synchronous, and
+  without the `outputDir` argument it never used. `MultiFileResult.indexContent`
+  went with it — it duplicated `files['index.ts']`. Neither was re-exported from
+  the package, so no published surface changes.
+
 ## [0.6.0] - 2026-08-15
 
 Fixes [#2](https://github.com/Guischk/airtable-types-gen/issues/2): generated

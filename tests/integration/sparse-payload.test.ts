@@ -120,7 +120,7 @@ describe.each(MAJORS)('Sparse Airtable payloads ($label)', ({ z }) => {
     );
   });
 
-  it('parses the sparse flattened shape too', () => {
+  it('parses the sparse flattened structure too', () => {
     const schema = buildSchema(
       generateTableZodSchema(allFieldTypesTable, true),
       z,
@@ -159,26 +159,105 @@ describe.each(MAJORS)('Sparse Airtable payloads ($label)', ({ z }) => {
 });
 
 describe.each(MAJORS)('Writable schemas never resurrect an empty value ($label)', ({ z }) => {
-  const source = generateTableWritableZodSchema(allFieldTypesTable);
+  // The invariant is the same in both structures; only the payload differs.
+  // Native writes reach Airtable as `{ id, fields }`, flattened ones are flat.
+  describe('flattened', () => {
+    const source = generateTableWritableZodSchema(allFieldTypesTable, true);
 
-  it('leaves an update payload exactly as the caller wrote it', () => {
-    const schema = buildSchema(source, z, 'EverythingUpdateSchema');
+    it('leaves an update payload exactly as the caller wrote it', () => {
+      const schema = buildSchema(source, z, 'EverythingUpdateSchema');
 
-    // The read schema would fill Text with '' and Check with false here. Sent
-    // as a PATCH that would blank cells the caller never mentioned.
-    expect(schema.parse({ Text: 'hello' })).toEqual({ Text: 'hello' });
+      // The read schema would fill Text with '' and Check with false here. Sent
+      // as a PATCH that would blank cells the caller never mentioned.
+      expect(schema.parse({ Text: 'hello' })).toEqual({ Text: 'hello' });
+    });
+
+    it('leaves a creation payload exactly as the caller wrote it', () => {
+      const schema = buildSchema(source, z, 'EverythingCreationSchema');
+
+      expect(schema.parse({ Text: 'hello' })).toEqual({ Text: 'hello' });
+    });
+
+    it('excludes computed fields, which cannot be written', () => {
+      const schema = buildSchema(source, z, 'EverythingCreationSchema');
+
+      // `Formula` is computed; Zod objects strip unknown keys rather than fail.
+      expect(schema.parse({ Formula: 42 })).toEqual({});
+    });
   });
 
-  it('leaves a creation payload exactly as the caller wrote it', () => {
-    const schema = buildSchema(source, z, 'EverythingCreationSchema');
+  /**
+   * A write does not send back what a read returned. Airtable uploads an
+   * attachment from a `url` and assigns its id, size and type itself; a
+   * collaborator is addressed by `id` *or* `email`; a barcode's `type` is
+   * optional. Reusing the read expression here rejected all three.
+   */
+  describe('composite cells accept what Airtable accepts on a write', () => {
+    const composite: AirtableTable = {
+      id: 'tblW',
+      name: 'W',
+      primaryFieldId: 'f1',
+      views: [],
+      fields: [
+        { id: 'f1', name: 'Files', type: 'multipleAttachments' },
+        { id: 'f2', name: 'Collab', type: 'singleCollaborator' },
+        { id: 'f3', name: 'Team', type: 'multipleCollaborators' },
+        { id: 'f4', name: 'Code', type: 'barcode' },
+      ],
+    };
+    const schema = () =>
+      buildSchema(generateTableWritableZodSchema(composite, false), z, 'WCreationSchema');
 
-    expect(schema.parse({ Text: 'hello' })).toEqual({ Text: 'hello' });
+    it.each([
+      ['an attachment given only its url', { Files: [{ url: 'https://example.com/a.pdf' }] }],
+      ['an attachment with a filename', { Files: [{ url: 'https://x.dev/a.pdf', filename: 'a.pdf' }] }],
+      ['a collaborator by email', { Collab: { email: 'ada@example.com' } }],
+      ['a collaborator by id', { Collab: { id: 'usrAda' } }],
+      ['a team by id', { Team: [{ id: 'usrAda' }] }],
+      ['a barcode without its type', { Code: { text: '0123456789' } }],
+    ])('accepts %s', (_label, fields) => {
+      expect(schema().safeParse({ fields }).success).toBe(true);
+    });
+
+    it('still rejects a barcode with no text at all', () => {
+      expect(schema().safeParse({ fields: { Code: { type: 'upce' } } }).success).toBe(false);
+    });
+
+    // Widening the write shape must not widen it to "anything": an attachment
+    // with neither a url to upload nor an id to keep, and a collaborator with
+    // no way to name who, are payloads Airtable cannot act on either.
+    it.each([
+      ['an attachment identifying nothing', { Files: [{}] }],
+      ['an attachment with only a filename', { Files: [{ filename: 'a.pdf' }] }],
+      ['a collaborator identifying nobody', { Collab: {} }],
+      ['a collaborator given only a name', { Collab: { name: 'Ada' } }],
+    ])('rejects %s', (_label, fields) => {
+      expect(schema().safeParse({ fields }).success).toBe(false);
+    });
   });
 
-  it('excludes computed fields, which cannot be written', () => {
-    const schema = buildSchema(source, z, 'EverythingCreationSchema');
+  describe('native', () => {
+    const source = generateTableWritableZodSchema(allFieldTypesTable, false);
 
-    // `Formula` is computed; Zod objects strip unknown keys rather than fail.
-    expect(schema.parse({ Formula: 42 })).toEqual({});
+    it('leaves an update payload exactly as the caller wrote it', () => {
+      const schema = buildSchema(source, z, 'EverythingUpdateSchema');
+
+      expect(schema.parse({ id: 'recABC123', fields: { Text: 'hello' } })).toEqual({
+        id: 'recABC123',
+        fields: { Text: 'hello' },
+      });
+    });
+
+    it('leaves a creation payload exactly as the caller wrote it', () => {
+      const schema = buildSchema(source, z, 'EverythingCreationSchema');
+
+      expect(schema.parse({ fields: { Text: 'hello' } })).toEqual({ fields: { Text: 'hello' } });
+    });
+
+    it('excludes computed fields, which cannot be written', () => {
+      const schema = buildSchema(source, z, 'EverythingCreationSchema');
+
+      expect(schema.parse({ fields: { Formula: 42 } })).toEqual({ fields: {} });
+    });
   });
 });

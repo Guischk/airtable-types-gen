@@ -67,3 +67,29 @@ omit. `tests/unit/emitter-alignment.test.ts` holds them to it.
 
 The generator never builds a Zod schema object and inspects it: `_def`
 introspection is Zod-3-only, and this package supports both majors.
+
+## Format / layout / structure
+
+Three independent axes of the generated output. Every combination is
+compile-tested, so none of them may be described in terms of another.
+
+- **Format** — what the source is written in: `zod` or `typescript`.
+- **Layout** — how it is split: `single` (one module for the whole base) or
+  `separate` (one module per table plus an `index.ts`, what `--separate-files`
+  asks for).
+- **Structure** — how a record is shaped: `native` (fields nested under
+  `fields`, next to `id` and `createdTime`) or `flattened` (fields at the root
+  next to `record_id`, what `--flatten` asks for). The CLI's own help already
+  uses this word; the code spells it `flatten: boolean`.
+
+Saying "layout" for the flatten axis is the mistake worth naming: it reads as a
+claim about `--separate-files`, which has nothing to do with whether fields are
+nested. Do not call **structure** a *shape* either — that word is taken, by the
+wire format and the SDK shape.
+
+All three are inputs to `generateFromSchema`, which is the single place a base schema
+becomes source text. Everything above it — fetching, environment resolution,
+writing to disk or stdout — decides only *where the bytes go*. That split is not
+tidiness: the assembly previously existed in three copies, and they drifted far
+enough that `--separate-files --typescript-only` emitted fewer utility types
+than the single-file run of the same base.

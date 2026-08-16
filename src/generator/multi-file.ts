@@ -1,16 +1,10 @@
 import { promises as fs } from 'fs';
 import path from 'path';
-import { AirtableBaseSchema, AirtableTable } from '../types.js';
-import { literal } from './emit.js';
+import { AirtableBaseSchema, AirtableTable, EmitOptions } from '../types.js';
 import { generateInterfaceName } from './schema.js';
-import { generateTableZodSchema, generateUtilityZodTypes } from './zod-generator.js';
+import { generateTableZodSchema, generateUtilityZodTypes, ZOD_IMPORT } from './zod-generator.js';
 import { generateSchemaName, generateTypeName } from './zod-schema.js';
-import { generateTableInterface } from './types.js';
-
-export interface MultiFileResult {
-  files: { [fileName: string]: string };
-  indexContent: string;
-}
+import { generateTableInterface, generateUtilityTypes } from './types.js';
 
 export const generateTableFileName = (tableName: string): string => {
   const fileName = tableName
@@ -46,10 +40,7 @@ export const buildTableFileNames = (tables: AirtableTable[]): Map<string, string
   return result;
 };
 
-export const generateSingleTableFile = (
-  table: AirtableTable,
-  options: { format: 'typescript' | 'zod'; flatten?: boolean }
-): string => {
+export const generateSingleTableFile = (table: AirtableTable, options: EmitOptions): string => {
   const { format, flatten = false } = options;
 
   if (format === 'zod') {
@@ -61,10 +52,7 @@ export const generateSingleTableFile = (
   }
 };
 
-export const generateIndexFile = (
-  schema: AirtableBaseSchema,
-  options: { format: 'typescript' | 'zod'; flatten?: boolean }
-): string => {
+export const generateIndexFile = (schema: AirtableBaseSchema, options: EmitOptions): string => {
   const { format } = options;
   const lines: string[] = [];
   const fileNames = buildTableFileNames(schema.tables);
@@ -107,60 +95,38 @@ export const generateIndexFile = (
   if (format === 'zod') {
     lines.push('// Utility types for Zod schemas');
     // Import z for z.infer in utility types
-    lines.push(`import { z } from 'zod';`);
+    lines.push(ZOD_IMPORT);
     const utilityTypes = generateUtilityZodTypes(schema, { flatten: options.flatten });
     lines.push(utilityTypes);
   } else {
-    // Add TypeScript utility types (adapted from existing generator)
+    // The same block the single-file run emits, rather than a subset of it.
     lines.push('// Utility types');
-    const tableNames = schema.tables.map((table) => literal(table.name)).join(' | ');
-
-    const tableNamesArray = schema.tables.map((table) => literal(table.name)).join(', ');
-
-    const tableTypesMapping = schema.tables
-      .map((table) => `  ${literal(table.name)}: ${generateInterfaceName(table.name)};`)
-      .join('\n');
-
-    lines.push(`export type AirtableTableName = ${tableNames};`);
-    lines.push('');
-    lines.push('/** Array of all available table names (runtime constant) */');
-    lines.push(`export const AIRTABLE_TABLE_NAMES = [${tableNamesArray}] as const;`);
-    lines.push('');
-    lines.push('export interface AirtableTableTypes {');
-    lines.push(tableTypesMapping);
-    lines.push('}');
-    lines.push('');
-    lines.push('export type GetTableRecord<T extends AirtableTableName> = AirtableTableTypes[T];');
-    lines.push('');
-    lines.push('export type GetTableFields<T extends AirtableTableName> =');
-    lines.push('  GetTableRecord<T> extends { fields: infer F } ? F : GetTableRecord<T>;');
+    lines.push(generateUtilityTypes(schema, options.flatten));
   }
 
   return lines.join('\n');
 };
 
-export const generateMultipleFiles = async (
+/**
+ * One module per table plus an `index.ts`, keyed by filename.
+ *
+ * Pure: it decides what the files contain, not where they land. Writing them is
+ * `writeMultipleFiles`, and choosing this layout at all is `generateFromSchema`.
+ */
+export const generateSeparateFiles = (
   schema: AirtableBaseSchema,
-  outputDir: string,
-  options: { format: 'typescript' | 'zod'; flatten?: boolean }
-): Promise<MultiFileResult> => {
-  const files: { [fileName: string]: string } = {};
+  options: EmitOptions
+): Record<string, string> => {
+  const files: Record<string, string> = {};
 
-  // Generate individual table files
   const fileNames = buildTableFileNames(schema.tables);
   for (const table of schema.tables) {
-    const fileName = `${fileNames.get(table.name)!}.ts`;
-    files[fileName] = generateSingleTableFile(table, options);
+    files[`${fileNames.get(table.name)!}.ts`] = generateSingleTableFile(table, options);
   }
 
-  // Generate index file
-  const indexContent = generateIndexFile(schema, options);
-  files['index.ts'] = indexContent;
+  files['index.ts'] = generateIndexFile(schema, options);
 
-  return {
-    files,
-    indexContent,
-  };
+  return files;
 };
 
 export const writeMultipleFiles = async (

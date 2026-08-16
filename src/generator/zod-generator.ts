@@ -2,26 +2,44 @@ import { AirtableBaseSchema, AirtableTable } from '../types.js';
 import { describe, literal, propertyKey, sanitizeComment } from './emit.js';
 import { emptyValueFor } from './empty-value.js';
 import { enrichFieldMetadata, resolvePropertyNames } from './schema.js';
-import { mapAirtableTypeToZod, generateSchemaName, generateTypeName } from './zod-schema.js';
+import {
+  mapAirtableTypeToZod,
+  mapAirtableTypeToZodWrite,
+  generateSchemaName,
+  generateTypeName,
+} from './zod-schema.js';
 
 /**
- * Emit the `  key: z.…,` entry (plus its JSDoc line) for one field.
- * Shared by the flattened and native shapes so the two cannot drift.
+ * Emit `key: expression,` plus its JSDoc line, at a given indent.
+ *
+ * The read and write paths compute *different* expressions for the same field —
+ * that separation is the point — but they must render the key identically, or a
+ * schema's keys stop lining up with the interface describing it.
+ */
+const emitEntry = (
+  propertyName: string,
+  expression: string,
+  comment: string | undefined,
+  indent: string
+): string[] => {
+  const lines: string[] = [];
+  if (comment) {
+    lines.push(`${indent}/** ${comment} */`);
+  }
+  lines.push(`${indent}${propertyKey(propertyName)}: ${expression},`);
+  return lines;
+};
+
+/**
+ * Read-path entry for one field. Shared by both structures so they cannot drift.
  */
 const emitFieldEntry = (field: AirtableTable['fields'][number], propertyName: string): string[] => {
-  const lines: string[] = [];
   const zodMapping = mapAirtableTypeToZod(field);
-  const enrichedField = enrichFieldMetadata(field);
   const emptyValue = emptyValueFor(field);
-
-  const comment = describe(field.description, zodMapping.description);
-  if (comment) {
-    lines.push(`  /** ${comment} */`);
-  }
 
   let expression = zodMapping.expression;
   // Applied here rather than in the mapping so Zod and TypeScript output agree.
-  if (enrichedField.isReadonly) {
+  if (enrichFieldMetadata(field).isReadonly) {
     expression += '.readonly()';
   }
 
@@ -37,9 +55,31 @@ const emitFieldEntry = (field: AirtableTable['fields'][number], propertyName: st
     expression += '.optional()';
   }
 
-  lines.push(`  ${propertyKey(propertyName)}: ${expression},`);
-  return lines;
+  return emitEntry(
+    propertyName,
+    expression,
+    describe(field.description, zodMapping.description),
+    '  '
+  );
 };
+
+/** The one literal every generated Zod module opens with. */
+export const ZOD_IMPORT = "import { z } from 'zod';";
+
+/**
+ * How a write payload is laid out, per structure. One decision, taken here,
+ * instead of the three separate `flatten` branches this replaced.
+ *
+ * Native writes reach Airtable as `{ id, fields }`, so the schema mirrors that.
+ * The flattened one is keyed like the flattened record.
+ *
+ * `recordEntry` is a whole entry, not a key: it is interpolated into
+ * `.extend({ … })`.
+ */
+const writeStructure = (flatten: boolean) =>
+  flatten
+    ? { nestUnderFields: false, recordEntry: 'record_id: z.string().optional()' }
+    : { nestUnderFields: true, recordEntry: 'id: z.string()' };
 
 /**
  * Emit the creation/update schemas for one table.
@@ -52,10 +92,17 @@ const emitFieldEntry = (field: AirtableTable['fields'][number], propertyName: st
  * strips defaults on Zod 3 and keeps them on Zod 4, so the same code would
  * corrupt data on one major only.
  */
-export const generateTableWritableZodSchema = (table: AirtableTable): string => {
+export const generateTableWritableZodSchema = (
+  table: AirtableTable,
+  flatten: boolean = false
+): string => {
   const schemaName = generateSchemaName(table.name);
   const typeBase = schemaName.replace(/Schema$/, '');
-  const propertyNames = resolvePropertyNames(table, true);
+  // Must match the read schema's keys for the same structure, or a caller that
+  // reads a record and writes it back would be renaming fields in transit.
+  const propertyNames = resolvePropertyNames(table, flatten);
+  const { nestUnderFields, recordEntry } = writeStructure(flatten);
+  const indent = nestUnderFields ? '    ' : '  ';
   const lines: string[] = [];
 
   lines.push('/**');
@@ -63,30 +110,38 @@ export const generateTableWritableZodSchema = (table: AirtableTable): string => 
   lines.push(' * Computed fields are excluded, and nothing is defaulted: a write must carry');
   lines.push(' * exactly what the caller set.');
   lines.push(' */');
-  lines.push(`export const ${typeBase}WritableSchema = z.object({`);
 
-  table.fields
+  const entries = table.fields
     .filter((field) => !enrichFieldMetadata(field).isReadonly)
-    .forEach((field) => {
-      const zodMapping = mapAirtableTypeToZod(field);
-      const comment = describe(field.description, zodMapping.description);
-      if (comment) {
-        lines.push(`  /** ${comment} */`);
-      }
-      lines.push(
-        `  ${propertyKey(propertyNames.get(field.id)!)}: ${zodMapping.expression}.optional(),`
+    .flatMap((field) => {
+      const zodMapping = mapAirtableTypeToZodWrite(field);
+      return emitEntry(
+        propertyNames.get(field.id)!,
+        `${zodMapping.expression}.optional()`,
+        describe(field.description, zodMapping.description),
+        indent
       );
     });
 
+  lines.push(`export const ${typeBase}WritableSchema = z.object({`);
+  if (nestUnderFields) {
+    lines.push('  fields: z.object({', ...entries, '  }),');
+  } else {
+    lines.push(...entries);
+  }
   lines.push('});');
   lines.push('');
-  lines.push('// Creation payload: writable fields only, all optional.');
+  lines.push(
+    nestUnderFields
+      ? '// Creation payload: every writable field optional, inside the `fields` wrapper'
+      : '// Creation payload: writable fields only, all optional.'
+  );
   lines.push(`export const ${typeBase}CreationSchema = ${typeBase}WritableSchema;`);
   lines.push(`export type ${typeBase}Creation = z.infer<typeof ${typeBase}CreationSchema>;`);
   lines.push('');
   lines.push('// Update payload: the same fields, plus the record being updated.');
   lines.push(
-    `export const ${typeBase}UpdateSchema = ${typeBase}WritableSchema.extend({ record_id: z.string().optional() });`
+    `export const ${typeBase}UpdateSchema = ${typeBase}WritableSchema.extend({ ${recordEntry} });`
   );
   lines.push(`export type ${typeBase}Update = z.infer<typeof ${typeBase}UpdateSchema>;`);
 
@@ -105,7 +160,7 @@ export const generateTableZodSchema = (
   // Add imports
   const includeImport = options?.includeImport ?? true;
   if (includeImport) {
-    lines.push("import { z } from 'zod';");
+    lines.push(ZOD_IMPORT);
     lines.push('');
   }
 
@@ -208,10 +263,12 @@ export const generateUtilityZodTypes = (
     })
     .join('\n\n');
 
-  // Only in flattened mode, provide creation/update schemas for write payloads.
-  const helpersBlock = flatten
-    ? '\n' + schema.tables.map(generateTableWritableZodSchema).join('\n\n')
-    : '';
+  // Write payloads, in both structures. They used to be flattened-only, which left
+  // native-mode callers deriving writes from the record type — where every
+  // field Airtable restores an empty value for is guaranteed, so required.
+  const helpersBlock =
+    '\n' +
+    schema.tables.map((table) => generateTableWritableZodSchema(table, flatten)).join('\n\n');
 
   const base = `
 /**
@@ -271,4 +328,23 @@ export { flattenRecord } from 'airtable-types-gen/runtime';
     : '';
 
   return base + extras;
+};
+
+/**
+ * A whole Zod module for a base: the import, every table's schema, then the
+ * utility types.
+ *
+ * Mirrors `generateAllTypes` on the TypeScript side, so "what a Zod module
+ * looks like" lives here rather than at the call site — where it was assembled
+ * by hand, in three places that drifted.
+ */
+export const generateAllZodSchemas = (
+  schema: AirtableBaseSchema,
+  flatten: boolean = false
+): string => {
+  const schemas = schema.tables
+    .map((table) => generateTableZodSchema(table, flatten, { includeImport: false }))
+    .join('\n\n');
+
+  return `${ZOD_IMPORT}\n\n` + schemas + generateUtilityZodTypes(schema, { flatten });
 };

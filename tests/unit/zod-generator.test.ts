@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  generateTableWritableZodSchema,
   generateTableZodSchema,
   generateUtilityZodTypes,
 } from '../../src/generator/zod-generator.js';
@@ -117,8 +118,11 @@ describe('Zod Generator', () => {
 
       // Always include readonly fields arrays
       expect(result).toContain('UsersReadonlyFields');
-      // But helpers should not be present unless flatten = true
-      expect(result).not.toMatch(/CreationSchema|UpdateSchema/);
+      // Write-path helpers are emitted in both structures, not flattened-only: a
+      // native-mode caller with no creation schema has to derive writes from
+      // the record type, where defaulted fields are required.
+      expect(result).toContain('UsersCreationSchema');
+      expect(result).toContain('UsersUpdateSchema');
     });
 
     it('should include flatten extras (flattenRecord, readonly fields, creation/update helpers) when flatten is true', () => {
@@ -235,6 +239,56 @@ describe('Zod Generator', () => {
       expect(result).toContain('value: z.string()');
       expect(result).toContain('isStale: z.boolean()');
       expect(result).toContain('}).readonly()'); // Should be readonly since aiText is computed
+    });
+  });
+
+  /**
+   * The write path must never carry a default. A generated record type marks
+   * every field Airtable restores an empty value for as guaranteed — correct on
+   * read, and fatal on write: derived that way, a create asks the caller for the
+   * whole table. These schemas are built from their own literal for that reason.
+   */
+  describe('generateTableWritableZodSchema', () => {
+    it('nests writable fields under `fields` in native mode', () => {
+      const result = generateTableWritableZodSchema(mockTable, false);
+
+      expect(result).toContain('export const UsersWritableSchema = z.object({');
+      expect(result).toContain('  fields: z.object({');
+      expect(result).toContain('    Name: z.string().optional(),');
+      expect(result).toContain(
+        'export const UsersUpdateSchema = UsersWritableSchema.extend({ id: z.string() });'
+      );
+    });
+
+    it('keeps the flattened structure flat and keyed on record_id', () => {
+      const result = generateTableWritableZodSchema(mockTable, true);
+
+      expect(result).toContain('export const UsersWritableSchema = z.object({');
+      expect(result).not.toContain('fields: z.object({');
+      expect(result).toContain('  Name: z.string().optional(),');
+      expect(result).toContain('record_id: z.string().optional()');
+    });
+
+    it.each([
+      ['native', false],
+      ['flattened', true],
+    ])('emits no default and no computed field (%s)', (_label, flatten) => {
+      const result = generateTableWritableZodSchema(mockTable, flatten as boolean);
+
+      expect(result).not.toContain('.default(');
+      // Computed fields of the fixture: createdTime, autoNumber, aiText.
+      expect(result).not.toContain('Created');
+      expect(result).not.toContain('Auto ID');
+      expect(result).not.toContain('AI Summary');
+    });
+
+    it('is emitted for both structures by the utility types', () => {
+      expect(generateUtilityZodTypes(mockSchema, { flatten: false })).toContain(
+        'UsersWritableSchema'
+      );
+      expect(generateUtilityZodTypes(mockSchema, { flatten: true })).toContain(
+        'UsersWritableSchema'
+      );
     });
   });
 });

@@ -23,6 +23,22 @@ describe('detectComputedField', () => {
     expect(detectComputedField(field)).toBe(true);
   });
 
+  /**
+   * `multipleLookupValues` is the type the metadata API actually returns for a
+   * lookup field; plain `lookup` did not appear once in a real 752-field base,
+   * while `multipleLookupValues` appeared 200 times. Guarding only the former
+   * put every real lookup into the write schemas, where Airtable rejects them.
+   */
+  it('should detect multipleLookupValues, the spelling Airtable really sends', () => {
+    const field: AirtableField = { id: 'test', name: 'Prices (from Clinics)', type: 'multipleLookupValues' };
+    expect(detectComputedField(field)).toBe(true);
+  });
+
+  it('should detect button, which Airtable renders and never accepts on a write', () => {
+    const field: AirtableField = { id: 'test', name: 'Open', type: 'button' };
+    expect(detectComputedField(field)).toBe(true);
+  });
+
   it('should not detect non-computed field types as computed', () => {
     const nonComputedTypes = ['singleLineText', 'number', 'checkbox', 'email'];
 
@@ -55,7 +71,7 @@ describe('resolvePropertyNames', () => {
     expect(resolved.get('f2')).toBe('Email');
   });
 
-  it('moves a field called "id" out of the way in the flattened shape', () => {
+  it('moves a field called "id" out of the way in the flattened structure', () => {
     const resolved = resolvePropertyNames(
       table([{ id: 'f1', name: 'id', type: 'number' }]),
       true

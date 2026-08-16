@@ -26,6 +26,46 @@ const ATTACHMENT_EXPRESSION =
   'z.object({ id: z.string(), url: z.string().url(), filename: z.string(), ' +
   'size: z.number().positive(), type: z.string() })';
 
+/**
+ * A collaborator is addressed on a write by `id` or by `email`. Which one is
+ * the caller's choice, so both are optional here rather than an exclusive
+ * union, and `name` — which Airtable ignores on a write — is tolerated rather
+ * than rejected.
+ */
+const WRITE_USER_EXPRESSION =
+  'z.object({ id: z.string().optional(), email: z.string().email().optional(), ' +
+  'name: z.string().optional() })' +
+  '.refine((value) => value.id !== undefined || value.email !== undefined, ' +
+  '"Address a collaborator by id or email")';
+
+/**
+ * An attachment is written either by uploading from a `url` or by passing back
+ * the `id` of one already there. Airtable assigns the rest — size, type, and
+ * the filename when it is not given — so only that choice is enforced.
+ */
+const WRITE_ATTACHMENT_EXPRESSION =
+  'z.object({ id: z.string().optional(), url: z.string().url().optional(), ' +
+  'filename: z.string().optional() })' +
+  '.refine((value) => value.id !== undefined || value.url !== undefined, ' +
+  '"Provide an attachment url to upload, or an id to keep")';
+
+/**
+ * Composite cells a caller sends in less detail than they come back in.
+ *
+ * Airtable fills most of these in for you: an attachment is uploaded from a
+ * `url` and gains its id, size and type on the next read; a barcode's `type` is
+ * optional. Reusing the read expression on the write path therefore rejects
+ * payloads Airtable accepts — the read expression describes what *comes back*,
+ * not what you may send. Every other type sends what it returns, so it falls
+ * through to `mapAirtableTypeToZod` unchanged.
+ */
+const WRITE_EXPRESSIONS: Record<string, string> = {
+  multipleAttachments: `z.array(${WRITE_ATTACHMENT_EXPRESSION})`,
+  singleCollaborator: WRITE_USER_EXPRESSION,
+  multipleCollaborators: `z.array(${WRITE_USER_EXPRESSION})`,
+  barcode: 'z.object({ text: z.string(), type: z.string().optional() })',
+};
+
 const PHONE_PATTERN = /^[\+]?[1-9][\d]{0,15}$/; // eslint-disable-line no-useless-escape
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -192,3 +232,16 @@ export const generateSchemaName = (tableName: string): string =>
 
 export const generateTypeName = (tableName: string): string =>
   `${toPascalCaseIdentifier(tableName)}Record`;
+
+/**
+ * The write-path counterpart of `mapAirtableTypeToZod`.
+ *
+ * Read and write never share a schema object (see `CONTEXT.md`), and for
+ * composite cells they cannot share an expression either. This is the one place
+ * that difference lives.
+ */
+export const mapAirtableTypeToZodWrite = (field: AirtableField): ZodMappingResult => {
+  const read = mapAirtableTypeToZod(field);
+  const override = WRITE_EXPRESSIONS[field.type];
+  return override ? { ...read, expression: override } : read;
+};
