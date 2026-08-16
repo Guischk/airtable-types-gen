@@ -54,7 +54,11 @@ export type WritableOnly<T> = {
  * the field metadata rather than derived from a type, so it also carries the
  * per-field validation. This is for hand-written interfaces.
  */
-export type CreatePayload<T> = Partial<WritableOnly<T>>;
+export type CreatePayload<T> = Partial<{
+  // Deliberately not `Partial<WritableOnly<T>>`: that would pin a live public
+  // type to a deprecated one, and `WritableOnly` could never then be removed.
+  [P in keyof T as IsReadonlyKey<T, P> extends true ? never : P]: T[P];
+}>;
 
 type IsReadonlyKey<T, P extends keyof T> =
   Equals<{ [K in P]: T[K] }, { -readonly [K in P]: T[K] }> extends true ? false : true;

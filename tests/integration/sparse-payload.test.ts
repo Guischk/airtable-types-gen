@@ -186,6 +186,44 @@ describe.each(MAJORS)('Writable schemas never resurrect an empty value ($label)'
     });
   });
 
+  /**
+   * A write does not send back what a read returned. Airtable uploads an
+   * attachment from a `url` and assigns its id, size and type itself; a
+   * collaborator is addressed by `id` *or* `email`; a barcode's `type` is
+   * optional. Reusing the read expression here rejected all three.
+   */
+  describe('composite cells accept what Airtable accepts on a write', () => {
+    const composite: AirtableTable = {
+      id: 'tblW',
+      name: 'W',
+      primaryFieldId: 'f1',
+      views: [],
+      fields: [
+        { id: 'f1', name: 'Files', type: 'multipleAttachments' },
+        { id: 'f2', name: 'Collab', type: 'singleCollaborator' },
+        { id: 'f3', name: 'Team', type: 'multipleCollaborators' },
+        { id: 'f4', name: 'Code', type: 'barcode' },
+      ],
+    };
+    const schema = () =>
+      buildSchema(generateTableWritableZodSchema(composite, false), z, 'WCreationSchema');
+
+    it.each([
+      ['an attachment given only its url', { Files: [{ url: 'https://example.com/a.pdf' }] }],
+      ['an attachment with a filename', { Files: [{ url: 'https://x.dev/a.pdf', filename: 'a.pdf' }] }],
+      ['a collaborator by email', { Collab: { email: 'ada@example.com' } }],
+      ['a collaborator by id', { Collab: { id: 'usrAda' } }],
+      ['a team by id', { Team: [{ id: 'usrAda' }] }],
+      ['a barcode without its type', { Code: { text: '0123456789' } }],
+    ])('accepts %s', (_label, fields) => {
+      expect(schema().safeParse({ fields }).success).toBe(true);
+    });
+
+    it('still rejects a barcode with no text at all', () => {
+      expect(schema().safeParse({ fields: { Code: { type: 'upce' } } }).success).toBe(false);
+    });
+  });
+
   describe('native', () => {
     const source = generateTableWritableZodSchema(allFieldTypesTable, false);
 

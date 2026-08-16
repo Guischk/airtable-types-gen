@@ -2,7 +2,12 @@ import { AirtableBaseSchema, AirtableTable } from '../types.js';
 import { describe, literal, propertyKey, sanitizeComment } from './emit.js';
 import { emptyValueFor } from './empty-value.js';
 import { enrichFieldMetadata, resolvePropertyNames } from './schema.js';
-import { mapAirtableTypeToZod, generateSchemaName, generateTypeName } from './zod-schema.js';
+import {
+  mapAirtableTypeToZod,
+  mapAirtableTypeToZodWrite,
+  generateSchemaName,
+  generateTypeName,
+} from './zod-schema.js';
 
 /**
  * Emit `key: expression,` plus its JSDoc line, at a given indent.
@@ -62,8 +67,8 @@ const emitFieldEntry = (field: AirtableTable['fields'][number], propertyName: st
 export const ZOD_IMPORT = "import { z } from 'zod';";
 
 /**
- * How a write payload is laid out, per structure — chosen once rather than
- * re-derived at each of the points that used to branch on `flatten`.
+ * How a write payload is laid out, per structure. One decision, taken here,
+ * instead of the three separate `flatten` branches this replaced.
  *
  * Native writes reach Airtable as `{ id, fields }`, so the schema mirrors that.
  * The flattened one is keyed like the flattened record.
@@ -109,7 +114,7 @@ export const generateTableWritableZodSchema = (
   const entries = table.fields
     .filter((field) => !enrichFieldMetadata(field).isReadonly)
     .flatMap((field) => {
-      const zodMapping = mapAirtableTypeToZod(field);
+      const zodMapping = mapAirtableTypeToZodWrite(field);
       return emitEntry(
         propertyNames.get(field.id)!,
         `${zodMapping.expression}.optional()`,

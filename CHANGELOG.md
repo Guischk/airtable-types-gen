@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 💥 Breaking
 
+- **`button` and `multipleLookupValues` are now recognised as computed.**
+  `COMPUTED_FIELD_TYPES` guarded only the spelling `lookup`, which the metadata
+  API does not actually return: in a real 752-field base `lookup` occurred **0**
+  times and `multipleLookupValues` **200** times, across 9 tables. Buttons were
+  missing outright. Both were therefore emitted as writable, and since this
+  release also emits write schemas for the native structure, they landed in
+  `…WritableSchema` / `…CreationSchema` / `…UpdateSchema` — where a payload
+  carrying one is rejected by Airtable.
+
+  **What to migrate**: lookup and button fields now carry `.readonly()` on the
+  read path and no longer appear on the write path. If you were assigning to one,
+  it was never going to reach Airtable.
+
 - **`--separate-files --typescript-only` output changed.** The multi-file index
   carried a hand-written subset of the utility types, so a base generated that
   way was missing `CreateRecord`, `UpdateRecord`, `ReadRecord` and
@@ -35,6 +48,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   only, all optional. What `WritableOnly<T>` was mistaken for.
 
 ### 🐛 Fixed
+
+- **Write schemas rejected legitimate composite payloads.** The write path
+  reused the *read* cell expression, so an attachment had to carry `id`,
+  `filename`, `size` and `type`, a collaborator both `id` and `email`, and a
+  barcode its `type` — none of which a caller sends. Airtable fills them in: an
+  attachment is uploaded from a `url`, a collaborator is addressed by `id` *or*
+  `email`. `mapAirtableTypeToZodWrite` now narrows those four types, on the write
+  path only. This also corrects the flattened write schemas, which carried the
+  same defect since 0.6.0.
+
+- **`--tables` matching nothing emitted a module that does not parse.**
+  `export type AirtableTableName = ;`, with exit code 0. The CLI now fails with
+  the unmatched names, and warns when only some are unknown.
 
 - **The native structure had no write-path schemas, so writes were derived from
   the read type.** `.default('')` means "optional in, guaranteed out", and

@@ -26,6 +26,33 @@ const ATTACHMENT_EXPRESSION =
   'z.object({ id: z.string(), url: z.string().url(), filename: z.string(), ' +
   'size: z.number().positive(), type: z.string() })';
 
+/**
+ * A collaborator is addressed on a write by `id` *or* `email`, never both, and
+ * `name` is never sent at all.
+ */
+const WRITE_USER_EXPRESSION =
+  'z.object({ id: z.string().optional(), email: z.string().email().optional(), ' +
+  'name: z.string().optional() })';
+
+/**
+ * Composite cells whose write shape is narrower than what comes back.
+ *
+ * Airtable fills most of these in for you: an attachment is uploaded from a
+ * `url` and gains its id, size and type on the next read; a barcode's `type` is
+ * optional. Reusing the read expression on the write path therefore rejects
+ * payloads Airtable accepts — the read shape describes what *comes back*, not
+ * what you may send. Every other type sends what it returns, so it falls
+ * through to `mapAirtableTypeToZod` unchanged.
+ */
+const WRITE_EXPRESSIONS: Record<string, string> = {
+  multipleAttachments:
+    'z.array(z.object({ id: z.string().optional(), url: z.string().url().optional(), ' +
+    'filename: z.string().optional() }))',
+  singleCollaborator: WRITE_USER_EXPRESSION,
+  multipleCollaborators: `z.array(${WRITE_USER_EXPRESSION})`,
+  barcode: 'z.object({ text: z.string(), type: z.string().optional() })',
+};
+
 const PHONE_PATTERN = /^[\+]?[1-9][\d]{0,15}$/; // eslint-disable-line no-useless-escape
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -192,3 +219,16 @@ export const generateSchemaName = (tableName: string): string =>
 
 export const generateTypeName = (tableName: string): string =>
   `${toPascalCaseIdentifier(tableName)}Record`;
+
+/**
+ * The write-path counterpart of `mapAirtableTypeToZod`.
+ *
+ * Read and write never share a schema object (see `CONTEXT.md`), and for
+ * composite cells they cannot share an expression either. This is the one place
+ * that difference lives.
+ */
+export const mapAirtableTypeToZodWrite = (field: AirtableField): ZodMappingResult => {
+  const read = mapAirtableTypeToZod(field);
+  const override = WRITE_EXPRESSIONS[field.type];
+  return override ? { ...read, expression: override } : read;
+};

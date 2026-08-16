@@ -189,8 +189,8 @@ export type UpdateRecord<T extends AirtableTableName> = {
 export type ReadRecord<T extends AirtableTableName> = GetTableRecord<T>;
 ```
 
-In flattened mode `CreateRecord`/`UpdateRecord` operate on the flat shape and
-key off `record_id` instead of a nested `fields` object.
+In the flattened structure `CreateRecord`/`UpdateRecord` operate on the flat
+record and key off `record_id` instead of a nested `fields` object.
 
 ## Library Usage
 
@@ -420,7 +420,10 @@ generated creation and update schemas, which are emitted per table in both
 structures and built from a separate, defaults-free shape:
 
 ```typescript
-// Native (default) — the shape Airtable's POST/PATCH body actually takes
+// Native (default) — the body Airtable's POST/PATCH actually takes.
+// Every field is optional; the `fields` wrapper itself is required, since a
+// write without it addresses nothing. The flattened schema has no wrapper, so
+// it accepts `{}`.
 UsersCreationSchema.parse({ fields: { Name: 'Ada' } });
 UsersUpdateSchema.parse({ id: 'rec1', fields: { Name: 'Ada' } });
 type NewUser = UsersCreation; // { fields: { Name?: string; … } }
@@ -450,7 +453,7 @@ update payload blanks untouched cells on one major only.
   `record_id`.
 - In flattened Zod output (`--flatten`), the generated file also re-exports
   `flattenRecord`.
-- Per-table `…ReadonlyFields` arrays are emitted in both modes.
+- Per-table `…ReadonlyFields` arrays are emitted in both structures.
 - Every generated file exposes an `AIRTABLE_SCHEMAS` registry and a
   `validateTableRecord(tableName, data)` helper.
 

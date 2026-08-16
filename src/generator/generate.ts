@@ -7,10 +7,14 @@
  * --typescript-only` ended up emitting a smaller set of utility types than the
  * single-file run of the same base.
  *
- * So: everything above this module decides *where the bytes go*, and nothing
- * else. Fetching, environment resolution, writing to disk or stdout, progress
- * reporting — all of it stays outside. What is left here is pure, which is also
- * what makes it the surface the tests aim at.
+ * So: everything above `generateFromSchema` decides *where the bytes go*, and
+ * nothing else. Fetching, environment resolution, writing to disk or stdout,
+ * progress reporting — all of it stays outside that function, which is what
+ * makes it pure and what makes it the surface the tests aim at.
+ *
+ * `generateTypes` sits in this file too and is the exception: it predates the
+ * seam and fetches its own schema. It is kept for the published API, not as a
+ * model to follow.
  */
 import {
   AirtableBaseSchema,

@@ -58,6 +58,24 @@ payload fails at the API, not silently.
 currently building the payload in two steps, so it is deferred to a release that
 can carry that break rather than folded into the write-path fix.
 
+## `--typescript-only` has no write-path types
+
+The Zod output gained per-table `…WritableSchema` / `…CreationSchema` /
+`…UpdateSchema`, which exclude computed fields. The TypeScript output did not:
+its `CreateRecord<T>` is still `{ fields: Partial<GetTableFields<T>> }`, which
+includes the computed fields Airtable will not accept on a write.
+
+**Impact**: `--typescript-only` callers. Milder than the Zod defect it mirrors —
+that mode has no `.parse()`, so its interfaces already mark every field `?` and
+nothing is *required*; the type merely permits a field that will be rejected.
+
+**Workaround**: `CreatePayload<GetTableFields<'Users'>>` from
+`airtable-types-gen/runtime` strips the readonly properties.
+
+**Status**: open. Nothing holds the two emitters together on writability —
+`tests/unit/emitter-alignment.test.ts` covers omission only — so closing this
+means extending that invariant, not just editing the emitted text.
+
 ## Other Issues
 
 None currently known. If you encounter issues, please report them at:

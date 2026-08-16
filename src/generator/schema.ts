@@ -1,11 +1,21 @@
 import { AirtableBaseSchema, AirtableField, AirtableTable, TypeMappingResult } from '../types.js';
 
-// Types de champs calculés par Airtable (readonly)
+/**
+ * Field types Airtable computes, so they are readonly and never writable.
+ *
+ * Both spellings of a lookup are listed on purpose. The metadata API returns
+ * `multipleLookupValues`; plain `lookup` did not occur once in a real
+ * 752-field base while `multipleLookupValues` occurred 200 times. Listing only
+ * `lookup` meant every real lookup was emitted as writable and landed in the
+ * creation and update schemas, where a write carrying one is rejected.
+ */
 const COMPUTED_FIELD_TYPES = [
   'formula',
   'rollup',
   'count',
   'lookup',
+  'multipleLookupValues',
+  'button',
   'createdTime',
   'lastModifiedTime',
   'createdBy',
