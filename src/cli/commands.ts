@@ -1,8 +1,8 @@
 import * as fs from 'fs/promises';
-import { generateMultipleFiles, writeMultipleFiles } from '../generator/multi-file.js';
+import { generateFromSchema } from '../generator/generate.js';
+import { writeMultipleFiles } from '../generator/multi-file.js';
 import { fetchBaseSchema } from '../generator/schema.js';
-import { generateAllTypes } from '../generator/types.js';
-import { generateTableZodSchema, generateUtilityZodTypes } from '../generator/zod-generator.js';
+import { OutputFormat } from '../types.js';
 import { CliOptions } from './options.js';
 
 export const executeGenerate = async (options: CliOptions): Promise<void> => {
@@ -26,7 +26,7 @@ export const executeGenerate = async (options: CliOptions): Promise<void> => {
 
   try {
     // Determine format and defaults (Zod by default, TypeScript only if requested)
-    const format = options.typescriptOnly ? 'typescript' : 'zod';
+    const format: OutputFormat = options.typescriptOnly ? 'typescript' : 'zod';
     // Non-flatten (native Airtable structure) by default
     const flatten = options.flatten || false;
     const separateFiles = options.separateFiles || false;
@@ -37,72 +37,52 @@ export const executeGenerate = async (options: CliOptions): Promise<void> => {
       process.exit(1);
     }
 
-    // Fetch schema
-    const schema = await fetchBaseSchema(baseId, token);
-    let filteredSchema = schema;
+    const baseSchema = await fetchBaseSchema(baseId, token);
 
-    if (options.tables && options.tables.length > 0) {
-      filteredSchema = {
-        tables: schema.tables.filter((table) => options.tables!.includes(table.name)),
-      };
-      console.error(`[Generator] Filtering to ${options.tables.length} specified tables`);
+    const result = generateFromSchema({
+      schema: baseSchema,
+      format,
+      flatten,
+      tables: options.tables,
+      layout: separateFiles ? 'separate' : 'single',
+    });
+
+    // Reports the tables that actually matched, not the names that were asked
+    // for — `--tables Typo` used to log a filter that kept nothing.
+    if (result.schema.tables.length < baseSchema.tables.length) {
+      console.error(
+        `[Generator] Filtered to ${result.schema.tables.length} of ${baseSchema.tables.length} tables`
+      );
     }
 
-    if (separateFiles) {
-      // Generate multiple files
-      const multiFileResult = await generateMultipleFiles(filteredSchema, options.output!, {
-        format,
-        flatten,
-      });
+    const wording =
+      format === 'zod'
+        ? { label: 'Zod schemas', noun: 'schemas' }
+        : { label: 'TypeScript types', noun: 'types' };
 
-      await writeMultipleFiles(options.output!, multiFileResult.files);
+    if (result.layout === 'separate') {
+      await writeMultipleFiles(options.output!, result.files);
 
+      console.error(`✅ ${wording.label} generated successfully`);
       console.error(
-        `✅ ${format === 'zod' ? 'Zod schemas' : 'TypeScript types'} generated successfully`
+        `📊 Generated ${Object.keys(result.files).length} files for ${result.schema.tables.length} tables:`
       );
-      console.error(
-        `📊 Generated ${Object.keys(multiFileResult.files).length} files for ${filteredSchema.tables.length} tables:`
-      );
-      filteredSchema.tables.forEach((table) => {
-        console.error(`   - ${table.name} (${table.fields.length} fields)`);
-      });
     } else {
-      // Generate single file
-      let content: string;
-
-      if (format === 'zod') {
-        // Generate Zod schemas
-        const imports = "import { z } from 'zod';\n\n";
-        const schemas = filteredSchema.tables
-          .map((table) => generateTableZodSchema(table, flatten, { includeImport: false }))
-          .join('\n\n');
-        const utilityTypes = generateUtilityZodTypes(filteredSchema, { flatten });
-        content = imports + schemas + utilityTypes;
-      } else {
-        // Generate TypeScript types (existing logic)
-        content = generateAllTypes(filteredSchema, flatten);
-      }
-
-      // Output the result
       if (options.output) {
-        // Write to file
-        await fs.writeFile(options.output, content);
-        console.error(
-          `✅ ${format === 'zod' ? 'Zod schemas' : 'TypeScript types'} generated successfully and saved to ${options.output}`
-        );
+        await fs.writeFile(options.output, result.content);
+        console.error(`✅ ${wording.label} generated successfully and saved to ${options.output}`);
       } else {
-        // Write to stdout (like supabase)
-        process.stdout.write(content);
+        // stdout carries the generated module when used as
+        // `airtable-types-gen > schemas.ts`; every other line goes to stderr.
+        process.stdout.write(result.content);
       }
 
-      // Print summary to stderr
-      console.error(
-        `📊 Generated ${format === 'zod' ? 'schemas' : 'types'} for ${filteredSchema.tables.length} tables:`
-      );
-      filteredSchema.tables.forEach((table) => {
-        console.error(`   - ${table.name} (${table.fields.length} fields)`);
-      });
+      console.error(`📊 Generated ${wording.noun} for ${result.schema.tables.length} tables:`);
     }
+
+    result.schema.tables.forEach((table) => {
+      console.error(`   - ${table.name} (${table.fields.length} fields)`);
+    });
   } catch (error) {
     console.error('Error generating types:', error);
     process.exit(1);

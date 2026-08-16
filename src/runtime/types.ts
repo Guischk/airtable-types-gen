@@ -25,17 +25,36 @@ export type Writable<T> = {
 
 /**
  * Extract only the writable (non-readonly) properties from a type.
- * Useful for create operations where computed fields should be excluded.
  *
  * The readonly-ness of a property is not observable from its value type —
  * `T[P] extends Readonly<T[P]>` is true for every P, which is why the previous
  * implementation always evaluated to `{}`. Comparing the property through two
  * otherwise-identical mapped types, one with the modifier stripped, is the only
  * way to detect it.
+ *
+ * @deprecated Not a create payload. It strips `readonly` and nothing else, so
+ * every property the record type marks as guaranteed stays **required** — and
+ * since 0.6.0 that is every field Airtable restores an empty value for. Passing
+ * `WritableOnly<UsersRecord>` to a create asks the caller for the whole table.
+ * Use the generated `…CreationSchema` / `…Creation` for a table, or
+ * {@link CreatePayload} for a hand-written interface.
  */
 export type WritableOnly<T> = {
   [P in keyof T as IsReadonlyKey<T, P> extends true ? never : P]: T[P];
 };
+
+/**
+ * A create payload for `T`: writable properties only, all optional.
+ *
+ * The optionality is the contract, not a convenience. Airtable accepts a
+ * partial write and leaves every field the caller omitted alone, so a create
+ * type that demands the full record describes a request nobody makes.
+ *
+ * Prefer the generated `…CreationSchema` where there is one — it is built from
+ * the field metadata rather than derived from a type, so it also carries the
+ * per-field validation. This is for hand-written interfaces.
+ */
+export type CreatePayload<T> = Partial<WritableOnly<T>>;
 
 type IsReadonlyKey<T, P extends keyof T> =
   Equals<{ [K in P]: T[K] }, { -readonly [K in P]: T[K] }> extends true ? false : true;

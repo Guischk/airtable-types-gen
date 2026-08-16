@@ -301,7 +301,7 @@ export const resolvePropertyNames = (
     let propertyName = generatePropertyName(field.name);
 
     if (flatten) {
-      // The flattened shape puts fields next to `record_id`, so a field called
+      // The flattened structure puts fields next to `record_id`, so a field called
       // `id` has to move even when nothing else claims that name.
       if (used.has(propertyName) || propertyName === 'id') {
         if (propertyName === 'id') {

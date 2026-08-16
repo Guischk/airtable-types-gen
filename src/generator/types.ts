@@ -1,7 +1,6 @@
-import { AirtableBaseSchema, AirtableTable, GenerateOptions, GenerateResult } from '../types.js';
+import { AirtableBaseSchema, AirtableTable } from '../types.js';
 import { bracketedKey, describe, literal, sanitizeComment } from './emit.js';
 import {
-  fetchBaseSchema,
   mapAirtableTypeToTSEnhanced,
   generateInterfaceName,
   resolvePropertyNames,
@@ -114,7 +113,19 @@ export const generateTableInterface = (table: AirtableTable, flatten: boolean = 
   return interfaceLines.join('\n');
 };
 
-const generateUtilityTypes = (schema: AirtableBaseSchema, flatten: boolean = false): string => {
+/**
+ * The utility types that accompany the interfaces — table-name union, record
+ * mapping, create/update/read helpers.
+ *
+ * Exported because the multi-file index needs the same block. It used to carry
+ * a hand-written subset instead, so a base generated with `--separate-files`
+ * was missing `CreateRecord`, `UpdateRecord`, `ReadRecord` and
+ * `AirtableSelectOptions` that the single-file run of the same base had.
+ */
+export const generateUtilityTypes = (
+  schema: AirtableBaseSchema,
+  flatten: boolean = false
+): string => {
   const tableNames = schema.tables.map((table) => literal(table.name)).join(' | ');
 
   const tableTypesMapping = schema.tables
@@ -268,27 +279,4 @@ export const generateAllTypes = (schema: AirtableBaseSchema, flatten: boolean = 
   const utilityTypes = generateUtilityTypes(schema, flatten);
 
   return imports + interfaces + utilityTypes;
-};
-
-export const generateTypes = async (options: GenerateOptions): Promise<GenerateResult> => {
-  console.error('[Generator] Starting type generation...');
-
-  const schema = await fetchBaseSchema(options.baseId, options.token);
-
-  let filteredSchema = schema;
-  if (options.tables && options.tables.length > 0) {
-    filteredSchema = {
-      tables: schema.tables.filter((table) => options.tables!.includes(table.name)),
-    };
-    console.error(`[Generator] Filtering to ${options.tables.length} specified tables`);
-  }
-
-  const content = generateAllTypes(filteredSchema, options.flatten || false);
-
-  console.error(`[Generator] Generated types for ${filteredSchema.tables.length} tables`);
-
-  return {
-    content,
-    schema: filteredSchema,
-  };
 };

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { generateTypes } from '../../src/generator/types';
+import { generateTypes } from '../../src/generator/generate';
 import { mockAirtableSchema } from '../fixtures/mock-schema';
 
 // Mock the fetch function

@@ -43,6 +43,21 @@ are built from a defaults-free shape and behave identically on both majors.
 introspection, which is Zod-3-only and was deliberately dropped in 0.5.0. They
 will be removed in a later release rather than fixed.
 
+## Flattened `…UpdateSchema` does not require the record id
+
+The native update schema requires `id`, since a PATCH without one cannot be
+applied. The flattened one still carries `record_id: z.string().optional()`,
+so it type-checks an update payload that identifies no record.
+
+**Impact**: flattened-mode callers only, and only as a missing guard — the
+payload fails at the API, not silently.
+
+**Workaround**: none needed beyond passing `record_id`.
+
+**Status**: open. Making it required is the right shape but breaks anyone
+currently building the payload in two steps, so it is deferred to a release that
+can carry that break rather than folded into the write-path fix.
+
 ## Other Issues
 
 None currently known. If you encounter issues, please report them at:

@@ -42,6 +42,21 @@ export interface GenerateOptions {
   tables?: string[];
 }
 
+/** What the generated source is written in. */
+export type OutputFormat = 'zod' | 'typescript';
+
+/** Whether the base lands in one module or one module per table. */
+export type OutputLayout = 'single' | 'separate';
+
+/**
+ * What an emitter needs beyond the schema itself. `flatten` selects the
+ * structure — native (fields nested under `fields`) or flattened.
+ */
+export interface EmitOptions {
+  format: OutputFormat;
+  flatten?: boolean;
+}
+
 export interface AirtableAiTextValue {
   state: 'generated' | 'pending' | 'error' | 'empty';
   value: string;

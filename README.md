@@ -112,10 +112,10 @@ ENVIRONMENT VARIABLES:
 
 ## Generated Types (TypeScript)
 
-Two shapes are available. **Native** (the default) mirrors Airtable's own record
-structure; **flattened** (`--flatten`) lifts every field to the root.
+Two structures are available. **Native** (the default) mirrors Airtable's own
+record structure; **flattened** (`--flatten`) lifts every field to the root.
 
-### Native shape (default)
+### Native structure (default)
 
 ```typescript
 /**
@@ -144,7 +144,7 @@ export interface UsersRecord {
 }
 ```
 
-### Flattened shape (`--flatten`)
+### Flattened structure (`--flatten`)
 
 ```typescript
 export interface UsersRecord {
@@ -156,7 +156,8 @@ export interface UsersRecord {
 }
 ```
 
-Note the record ID is `id` in native mode and `record_id` in flattened mode.
+Note the record ID is `id` in the native structure and `record_id` in the
+flattened one.
 
 **Every field is optional.** Airtable omits empty cells from its responses
 entirely, so the wire format guarantees no field at all — and these interfaces
@@ -198,7 +199,7 @@ key off `record_id` instead of a nested `fields` object.
 ```typescript
 import type { UsersRecord, ProjectsRecord, CreateRecord, UpdateRecord } from './types';
 
-// Type-safe record creation (native shape: fields live under `fields`)
+// Type-safe record creation (native structure: fields live under `fields`)
 const newUser: CreateRecord<'Users'> = {
   fields: {
     Name: 'John Doe',
@@ -244,7 +245,7 @@ const typedUsers: UsersRecord[] = flattenRecords<UsersRecord>(records);
 const oneUser: UsersRecord = flattenRecord<UsersRecord>(record);
 
 // Note: Ensure your generated types were created with --flatten for the
-// table interfaces (e.g., UsersRecord) to match the flattened shape.
+// table interfaces (e.g., UsersRecord) to match the flattened structure.
 ```
 
 ### Validating SDK records (`toRawRecord`)
@@ -275,10 +276,38 @@ matching object.
 
 ### Advanced Usage
 
+`generateFromSchema` is the entry point the CLI itself goes through. It takes a
+base schema and returns generated source; fetching that schema is a separate
+step, so you can generate from a cached or hand-built one without touching the
+network.
+
+```typescript
+import { fetchBaseSchema, generateFromSchema } from 'airtable-types-gen';
+
+const schema = await fetchBaseSchema('appXXXXXXXX', 'your-token');
+
+// One module holding every table — what `airtable-types-gen > schemas.ts` emits
+const { content } = generateFromSchema({
+  schema,
+  format: 'zod', // 'zod' (default) or 'typescript'
+  flatten: true, // default false
+  tables: ['Users', 'Projects'], // default: every table
+});
+
+// One module per table plus an index — what `--separate-files` emits
+const { files } = generateFromSchema({ schema, layout: 'separate' });
+// { 'users.ts': '…', 'projects.ts': '…', 'index.ts': '…' }
+```
+
+Both layouts also return `schema`: the base schema after `tables` filtering,
+which is what the output was actually generated from.
+
+`generateTypes` predates it and is kept for compatibility. It fetches the schema
+itself and always emits single-file TypeScript:
+
 ```typescript
 import { generateTypes } from 'airtable-types-gen';
 
-// Programmatic type generation (advanced)
 const result = await generateTypes({
   baseId: 'appXXXXXXXX',
   token: 'your-token',
@@ -384,11 +413,27 @@ back.
 
 #### Writing records
 
-The creation and update schemas are built from a separate, defaults-free shape:
+**Never derive a write type from `…Record`.** It is the type of what leaves
+`.parse()`, where every restored field is guaranteed — so a create built from it
+demands every text, checkbox and multi-select field on the table. Use the
+generated creation and update schemas, which are emitted per table in both
+structures and built from a separate, defaults-free shape:
 
 ```typescript
-UsersUpdateSchema.parse({ Name: "Ada" }); // → { Name: 'Ada' }, nothing else
+// Native (default) — the shape Airtable's POST/PATCH body actually takes
+UsersCreationSchema.parse({ fields: { Name: 'Ada' } });
+UsersUpdateSchema.parse({ id: 'rec1', fields: { Name: 'Ada' } });
+type NewUser = UsersCreation; // { fields: { Name?: string; … } }
+
+// Flattened (--flatten) — keyed like the flattened record
+UsersUpdateSchema.parse({ Name: 'Ada' }); // → { Name: 'Ada' }, nothing else
 ```
+
+For a hand-written interface with no generated schema, `CreatePayload<T>` from
+`airtable-types-gen/runtime` applies the same rule — writable properties only,
+all optional — though on the type you give it, so there is no `fields` wrapper.
+`WritableOnly<T>` does **not** — it strips `readonly` and nothing else, leaving
+every guaranteed field required, and is deprecated for this reason.
 
 Do **not** rebuild them with `createUpdateSchema`/`createCreationSchema` from
 `airtable-types-gen/runtime` (both deprecated). Those apply `.partial()` to the
@@ -399,9 +444,12 @@ update payload blanks untouched cells on one major only.
 
 - Computed fields are marked `.readonly()`.
 - The inferred type exported next to each schema is `z.infer<typeof ...>`.
+- Per-table `…WritableSchema` / `…CreationSchema` / `…UpdateSchema` helpers are
+  emitted in **both** structures. Native nests fields under `fields` and
+  requires `id` on update; flattened is flat and carries an optional
+  `record_id`.
 - In flattened Zod output (`--flatten`), the generated file also re-exports
-  `flattenRecord`, and adds per-table `…CreationSchema` / `…UpdateSchema`
-  helpers. These helpers are flattened-mode only.
+  `flattenRecord`.
 - Per-table `…ReadonlyFields` arrays are emitted in both modes.
 - Every generated file exposes an `AIRTABLE_SCHEMAS` registry and a
   `validateTableRecord(tableName, data)` helper.

@@ -55,7 +55,7 @@ describe('resolvePropertyNames', () => {
     expect(resolved.get('f2')).toBe('Email');
   });
 
-  it('moves a field called "id" out of the way in the flattened shape', () => {
+  it('moves a field called "id" out of the way in the flattened structure', () => {
     const resolved = resolvePropertyNames(
       table([{ id: 'f1', name: 'id', type: 'number' }]),
       true

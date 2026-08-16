@@ -120,7 +120,7 @@ describe.each(MAJORS)('Sparse Airtable payloads ($label)', ({ z }) => {
     );
   });
 
-  it('parses the sparse flattened shape too', () => {
+  it('parses the sparse flattened structure too', () => {
     const schema = buildSchema(
       generateTableZodSchema(allFieldTypesTable, true),
       z,
@@ -159,26 +159,55 @@ describe.each(MAJORS)('Sparse Airtable payloads ($label)', ({ z }) => {
 });
 
 describe.each(MAJORS)('Writable schemas never resurrect an empty value ($label)', ({ z }) => {
-  const source = generateTableWritableZodSchema(allFieldTypesTable);
+  // The invariant is the same in both structures; only the payload differs.
+  // Native writes reach Airtable as `{ id, fields }`, flattened ones are flat.
+  describe('flattened', () => {
+    const source = generateTableWritableZodSchema(allFieldTypesTable, true);
 
-  it('leaves an update payload exactly as the caller wrote it', () => {
-    const schema = buildSchema(source, z, 'EverythingUpdateSchema');
+    it('leaves an update payload exactly as the caller wrote it', () => {
+      const schema = buildSchema(source, z, 'EverythingUpdateSchema');
 
-    // The read schema would fill Text with '' and Check with false here. Sent
-    // as a PATCH that would blank cells the caller never mentioned.
-    expect(schema.parse({ Text: 'hello' })).toEqual({ Text: 'hello' });
+      // The read schema would fill Text with '' and Check with false here. Sent
+      // as a PATCH that would blank cells the caller never mentioned.
+      expect(schema.parse({ Text: 'hello' })).toEqual({ Text: 'hello' });
+    });
+
+    it('leaves a creation payload exactly as the caller wrote it', () => {
+      const schema = buildSchema(source, z, 'EverythingCreationSchema');
+
+      expect(schema.parse({ Text: 'hello' })).toEqual({ Text: 'hello' });
+    });
+
+    it('excludes computed fields, which cannot be written', () => {
+      const schema = buildSchema(source, z, 'EverythingCreationSchema');
+
+      // `Formula` is computed; Zod objects strip unknown keys rather than fail.
+      expect(schema.parse({ Formula: 42 })).toEqual({});
+    });
   });
 
-  it('leaves a creation payload exactly as the caller wrote it', () => {
-    const schema = buildSchema(source, z, 'EverythingCreationSchema');
+  describe('native', () => {
+    const source = generateTableWritableZodSchema(allFieldTypesTable, false);
 
-    expect(schema.parse({ Text: 'hello' })).toEqual({ Text: 'hello' });
-  });
+    it('leaves an update payload exactly as the caller wrote it', () => {
+      const schema = buildSchema(source, z, 'EverythingUpdateSchema');
 
-  it('excludes computed fields, which cannot be written', () => {
-    const schema = buildSchema(source, z, 'EverythingCreationSchema');
+      expect(schema.parse({ id: 'recABC123', fields: { Text: 'hello' } })).toEqual({
+        id: 'recABC123',
+        fields: { Text: 'hello' },
+      });
+    });
 
-    // `Formula` is computed; Zod objects strip unknown keys rather than fail.
-    expect(schema.parse({ Formula: 42 })).toEqual({});
+    it('leaves a creation payload exactly as the caller wrote it', () => {
+      const schema = buildSchema(source, z, 'EverythingCreationSchema');
+
+      expect(schema.parse({ fields: { Text: 'hello' } })).toEqual({ fields: { Text: 'hello' } });
+    });
+
+    it('excludes computed fields, which cannot be written', () => {
+      const schema = buildSchema(source, z, 'EverythingCreationSchema');
+
+      expect(schema.parse({ fields: { Formula: 42 } })).toEqual({ fields: {} });
+    });
   });
 });
