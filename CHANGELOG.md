@@ -5,6 +5,58 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.1] - 2026-08-20
+
+Non-breaking. Nothing about generated output changes.
+
+### 🐛 Fixed
+
+- **`NoMatchingTablesError` is now exported from the package root.** 0.7.0
+  introduced it as a breaking change — a `tables` selection matching nothing
+  throws instead of emitting a module that does not parse — but `src/index.ts`
+  re-exports a *named* list and did not mention it. The class was reachable
+  from `src/generator/` and from nowhere a consumer could import, so the only
+  way to distinguish it from any other failure was to match on the message
+  string. Callers can now `instanceof` the error the release asked them to
+  handle.
+
+### ✅ Tests
+
+- **A guard for hostile table, field and choice names.** Everything
+  user-controlled reaches the generated file as source text, and
+  `src/generator/emit.ts` centralises the escaping that keeps a stray quote,
+  backslash or comment terminator from producing a module that does not parse.
+  Reported as [#1](https://github.com/Guischk/airtable-types-gen/pull/1) by
+  @kaz-yamada for select choices containing an apostrophe.
+
+  That specific case was already fixed, and covered incidentally: the
+  `ALL_FIELD_TYPES` sweep carries choices with quotes and backslashes, so
+  breaking the choice escaping fails 34 tests. **Names were not covered at
+  all** — reverting `bracketedKey`, which renders interface member keys in the
+  TypeScript emitter, left the entire suite green. `tests/integration/hostile-names.test.ts`
+  closes that: it asserts the emitted source *parses*, on both emitters and
+  both structures, rather than asserting on escape spelling.
+
+- **A public-surface test.** `tests/integration/public-surface.test.ts` imports
+  from the package root rather than from `src/generator/`, so a symbol that
+  exists but is unreachable fails. The existing `NoMatchingTablesError` test
+  imported the deep path and would have passed throughout the defect above.
+
+### 📦 Chores
+
+- **`v0.6.0` and `v0.7.0` tagged retroactively**, at the `master` commits from
+  which each was published. Both shipped untagged, which meant answering "what
+  did this version emit?" required identifying release commits by hand.
+
+- **`docs/agents/release.md`** — a release checklist, so tagging stops being
+  forgotten. It records that this project uses **pnpm for every step including
+  the registry operations**, and how CLI writes authenticate given the account
+  uses a passkey.
+
+- **`test-package.sh` moved to pnpm.** The pre-publication script still called
+  `npm run build`, `npm install` and `npm test`, and printed `npm publish` as
+  its final instruction — the last npm holdout in a pnpm project.
+
 ## [0.7.0] - 2026-08-16
 
 ### 💥 Breaking
