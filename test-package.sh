@@ -9,7 +9,7 @@ echo
 
 # Étape 1: Build du package principal
 echo "📦 Step 1: Building main package..."
-npm run build
+pnpm run build
 
 if [ $? -ne 0 ]; then
     echo "❌ Build failed! Fix errors before testing."
@@ -26,13 +26,13 @@ cd test-local
 # Installer les dépendances si nécessaire
 if [ ! -d "node_modules" ]; then
     echo "📦 Installing test dependencies..."
-    npm install
+    pnpm install
 fi
 
 # Étape 3: Lancer tous les tests
 echo "🚀 Step 3: Running all tests..."
 echo
-npm test
+pnpm test
 
 echo
 echo "🏁 Test completed!"
@@ -43,4 +43,4 @@ echo "   - If some tests failed: Review the output and fix issues"
 echo "   - To test with real Airtable: Configure test-local/.env with your credentials"
 echo
 echo "🚀 To publish:"
-echo "   npm publish"
+echo "   pnpm publish"
