@@ -6,6 +6,45 @@ import {
   resolvePropertyNames,
 } from './schema.js';
 
+/**
+ * Emit the member lines for one interface's fields.
+ *
+ * The Zod emitter funnels both structures through a single `emitFieldEntry`;
+ * this is its TypeScript counterpart. The flattened and native branches used to
+ * carry byte-identical copies of this loop, differing only in the boolean
+ * passed to `resolvePropertyNames` — so every change to per-field emission had
+ * to be written twice. That is the shape that let the multi-file index drift
+ * from the single-file output until 0.7.0 had to reconcile them.
+ *
+ * These interfaces describe the wire format, where every field is absent-able:
+ * Airtable omits every empty cell. See `empty-value.ts` for what the Zod
+ * emitter does with the same fact on the read path.
+ */
+const emitFieldEntries = (table: AirtableTable, flatten: boolean): string[] => {
+  const lines: string[] = [];
+  const propertyNames = resolvePropertyNames(table, flatten);
+
+  table.fields.forEach((field, index) => {
+    const propertyName = propertyNames.get(field.id)!;
+    const typeMapping = mapAirtableTypeToTSEnhanced(field);
+    const comment = describe(field.description, typeMapping.description);
+
+    // Blank line between properties, but not before the first.
+    if (index > 0) {
+      lines.push('');
+    }
+
+    if (comment) {
+      lines.push(`  /** ${comment} */`);
+    }
+
+    const readonlyModifier = typeMapping.readonly ? 'readonly ' : '';
+    lines.push(`  ${readonlyModifier}${bracketedKey(propertyName)}?: ${typeMapping.type};`);
+  });
+
+  return lines;
+};
+
 export const generateTableInterface = (table: AirtableTable, flatten: boolean = false): string => {
   const interfaceName = generateInterfaceName(table.name);
   const interfaceLines: string[] = [];
@@ -24,37 +63,7 @@ export const generateTableInterface = (table: AirtableTable, flatten: boolean = 
     interfaceLines.push('  /** Unique Airtable record ID */');
     interfaceLines.push('  record_id: string;');
 
-    const propertyNames = resolvePropertyNames(table, true);
-
-    table.fields.forEach((field, index) => {
-      const propertyName = propertyNames.get(field.id)!;
-
-      const typeMapping = mapAirtableTypeToTSEnhanced(field);
-      const propertyType = typeMapping.type;
-      const isReadonly = typeMapping.readonly;
-      // These interfaces describe the wire format, where every field is
-      // absent-able: Airtable omits every empty cell. See `empty-value.ts` for
-      // what the Zod emitter does with the same fact on the read path.
-      const optional = '?';
-
-      const comment = describe(field.description, typeMapping.description);
-
-      // Add empty line before property if we had previous properties
-      if (index > 0) {
-        interfaceLines.push('');
-      }
-
-      // Add comment if we have descriptions
-      if (comment) {
-        interfaceLines.push(`  /** ${comment} */`);
-      }
-
-      // Add property
-      const readonlyModifier = isReadonly ? 'readonly ' : '';
-      interfaceLines.push(
-        `  ${readonlyModifier}${bracketedKey(propertyName)}${optional}: ${propertyType};`
-      );
-    });
+    interfaceLines.push(...emitFieldEntries(table, true));
 
     interfaceLines.push('}');
   } else {
@@ -64,35 +73,7 @@ export const generateTableInterface = (table: AirtableTable, flatten: boolean = 
     // First, generate the Fields interface
     interfaceLines.push(`interface ${fieldsInterfaceName} {`);
 
-    const propertyNames = resolvePropertyNames(table, false);
-
-    table.fields.forEach((field, index) => {
-      const propertyName = propertyNames.get(field.id)!;
-
-      const typeMapping = mapAirtableTypeToTSEnhanced(field);
-      const propertyType = typeMapping.type;
-      const isReadonly = typeMapping.readonly;
-      // Wire format: every field is absent-able. See the flattened branch above.
-      const optional = '?';
-
-      const comment = describe(field.description, typeMapping.description);
-
-      // Add empty line before property if we have previous fields
-      if (index > 0) {
-        interfaceLines.push('');
-      }
-
-      // Add comment if we have descriptions
-      if (comment) {
-        interfaceLines.push(`  /** ${comment} */`);
-      }
-
-      // Add property
-      const readonlyModifier = isReadonly ? 'readonly ' : '';
-      interfaceLines.push(
-        `  ${readonlyModifier}${bracketedKey(propertyName)}${optional}: ${propertyType};`
-      );
-    });
+    interfaceLines.push(...emitFieldEntries(table, false));
 
     interfaceLines.push('}');
     interfaceLines.push('');
