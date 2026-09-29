@@ -1,0 +1,119 @@
+name: Security preflight
+
+on:
+  pull_request:
+  push:
+    branches: ["main", "preprod", "master"]
+  workflow_dispatch:
+  workflow_call:
+  schedule:
+    - cron: '3 1 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  security-preflight:
+    name: Security preflight
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Monitor the public runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2
+        with:
+          egress-policy: audit
+
+      - name: Checkout source as data
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Reject incident indicators and automatic editor tasks
+        run: python3 -I .github/security/scan-indicators.py .
+
+      - name: Download and verify Gitleaks
+        env:
+          GITLEAKS_VERSION: '8.30.1'
+          GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+        run: |
+          curl --disable --fail --silent --show-error --location \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            --output "$RUNNER_TEMP/gitleaks.tar.gz"
+          echo "$GITLEAKS_SHA256  $RUNNER_TEMP/gitleaks.tar.gz" | sha256sum --check --status
+          tar -xzf "$RUNNER_TEMP/gitleaks.tar.gz" -C "$RUNNER_TEMP" gitleaks
+          printf '[extend]\nuseDefault = true\n' > "$RUNNER_TEMP/gitleaks.toml"
+          touch "$RUNNER_TEMP/gitleaks-ignore"
+
+      - name: Verify secret detection with a synthetic canary
+        run: |
+          mkdir "$RUNNER_TEMP/secret-canary"
+          python3 -I - <<'PY'
+          import os, random, string
+          from pathlib import Path
+          token = 'gh' + 'p_' + ''.join(random.Random(20260929).choices(string.ascii_letters + string.digits, k=36))
+          (Path(os.environ['RUNNER_TEMP']) / 'secret-canary' / 'fixture.txt').write_text('token = "' + token + '"\n')
+          PY
+          set +e
+          "$RUNNER_TEMP/gitleaks" dir "$RUNNER_TEMP/secret-canary" \
+            --config "$RUNNER_TEMP/gitleaks.toml" --gitleaks-ignore-path "$RUNNER_TEMP/gitleaks-ignore" \
+            --ignore-gitleaks-allow --redact=100 --no-banner --log-level=warn
+          result=$?
+          set -e
+          if [ "$result" -ne 1 ]; then
+            echo '::error::Secret detection self-test failed.'
+            exit 1
+          fi
+
+      - name: Scan current files and incoming commits for secrets
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          "$RUNNER_TEMP/gitleaks" dir . --config "$RUNNER_TEMP/gitleaks.toml" \
+            --gitleaks-ignore-path "$RUNNER_TEMP/gitleaks-ignore" --ignore-gitleaks-allow \
+            --redact=100 --no-banner --log-level=warn
+          if [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ && "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            "$RUNNER_TEMP/gitleaks" git . --log-opts="$BASE_SHA..$HEAD_SHA" \
+              --config "$RUNNER_TEMP/gitleaks.toml" --gitleaks-ignore-path "$RUNNER_TEMP/gitleaks-ignore" \
+              --ignore-gitleaks-allow --redact=100 --no-banner --log-level=warn
+          fi
+
+      - name: Analyze source with Semgrep Community Edition offline
+        env:
+          SEMGREP_IMAGE: semgrep/semgrep@sha256:32e459968daabe7ab86968184a29109b9564aa00392401156f9788452b42786b
+          SEMGREP_RULES_SHA256: a6d09825468d4386afd535433c3186fd05acfee3b25c5d56790921d2d2e4f3e6
+        run: |
+          echo "$SEMGREP_RULES_SHA256  .github/security/semgrep-rules.json" | sha256sum --check --status
+          mkdir "$RUNNER_TEMP/semgrep-results"
+          docker pull "$SEMGREP_IMAGE"
+          set +e
+          docker run --rm --network=none --cap-drop=ALL --security-opt=no-new-privileges \
+            --read-only --tmpfs /tmp:rw,nosuid,nodev,size=512m --entrypoint semgrep \
+            -e SEMGREP_SEND_METRICS=off -e SEMGREP_ENABLE_VERSION_CHECK=0 \
+            -e SEMGREP_SETTINGS_FILE=/tmp/settings.yml -e SEMGREP_LOG_FILE=/tmp/semgrep.log \
+            --mount "type=bind,source=$GITHUB_WORKSPACE,target=/src,readonly" \
+            --mount "type=bind,source=$RUNNER_TEMP/semgrep-results,target=/results" \
+            "$SEMGREP_IMAGE" scan --config /src/.github/security/semgrep-rules.json \
+            --metrics=off --disable-version-check --no-git-ignore --x-ignore-semgrepignore-files \
+            --disable-nosem --severity=ERROR --error --quiet --json --output /results/findings.json /src
+          result=$?
+          set -e
+          # Keep source snippets in the ephemeral runner; only print locations and rule IDs.
+          if [ ! -f "$RUNNER_TEMP/semgrep-results/findings.json" ]; then
+            echo '::error::Static analysis did not produce a report.'
+            exit 2
+          fi
+          if [ -f "$RUNNER_TEMP/semgrep-results/findings.json" ]; then
+            python3 -I - <<'PY'
+          import json, os
+          from pathlib import Path
+          report = json.loads((Path(os.environ['RUNNER_TEMP']) / 'semgrep-results/findings.json').read_text())
+          for finding in report.get('results', []):
+              print(json.dumps({'file': finding['path'], 'line': finding['start']['line'], 'rule': finding['check_id']}))
+          print(f"Static analysis: {len(report.get('results', []))} finding(s), {len(report.get('errors', []))} error(s)")
+          if report.get('errors'):
+              raise SystemExit(2)
+          PY
+          fi
+          exit "$result"
