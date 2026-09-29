@@ -89,9 +89,12 @@ jobs:
           docker pull "$SEMGREP_IMAGE"
           set +e
           docker run --rm --network=none --cap-drop=ALL --security-opt=no-new-privileges \
+            --user "$(id -u):$(id -g)" \
             --read-only --tmpfs /tmp:rw,nosuid,nodev,size=512m --entrypoint semgrep \
             -e SEMGREP_SEND_METRICS=off -e SEMGREP_ENABLE_VERSION_CHECK=0 \
             -e SEMGREP_SETTINGS_FILE=/tmp/settings.yml -e SEMGREP_LOG_FILE=/tmp/semgrep.log \
+            -e GIT_CONFIG_GLOBAL=/tmp/gitconfig \
+            -e XDG_CACHE_HOME=/tmp/cache \
             --mount "type=bind,source=$GITHUB_WORKSPACE,target=/src,readonly" \
             --mount "type=bind,source=$RUNNER_TEMP/semgrep-results,target=/results" \
             "$SEMGREP_IMAGE" scan --config /src/.github/security/semgrep-rules.json \
