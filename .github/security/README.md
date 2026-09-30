@@ -1,11 +1,3 @@
-# Security controls
+# Security policy files
 
-The `Security preflight` job scans files as data before the existing project CI. It uses Gitleaks 8.30.1 with fully redacted output, a frozen 225-rule Semgrep security-audit pack, and the known September 2026 incident markers. It rejects VS Code tasks that run automatically when a folder opens. No application secret, package installation, source import or build is used in this job. The Semgrep container has no network access during analysis. Findings are not a guarantee that all malware will be detected.
-
-Actions and the scanner container are pinned to immutable commits/digests. The Gitleaks download and the Semgrep rule pack are checked by SHA-256. Repository ignore files and inline suppression comments cannot silently suppress the security scans. Updating the rule pack requires a reviewed PR and an updated digest in the workflow.
-
-Solo workflow: the repository owner reviews and manually merges the PR after the required `Security preflight` check passes. An approval from another person is not required. Server rules protect `main` and `preprod`, require resolved review discussions, and block force pushes and branch deletion without an administrator bypass. The exact check must originate from GitHub Actions and be tested against the latest target branch. Auto-merge is disabled. Actions remains suspended after the incident, so merges remain blocked by the missing check. Renew the affected credentials and review execution paths before a controlled scanner run; do not re-enable old project workflows blindly. Use read-only default tokens and do not pass application secrets to this reusable workflow.
-
-Dependabot updates require review. CodeQL and dependency review are included for this public repository where its languages are supported. Dependency review runs when a supported dependency manifest is present and requires the GitHub dependency graph; a repository without a manifest does not have dependency changes to review. Harden-Runner Community observes public runner traffic in audit mode; it does not block all outbound traffic.
-
-GitHub security/Actions email preferences must be set and delivery tested by the account owner. This workflow does not configure the cross-provider email monitor, Doppler, remote deployment approvals, OIDC or key rotation. Those are tracked in the incident follow-up.
+- [Scanner operation and incident recovery](../../docs/operations/security-preflight.md)
