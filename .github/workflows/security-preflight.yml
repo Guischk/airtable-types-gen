@@ -28,9 +28,20 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
+          path: candidate
+
+      - name: Checkout the reviewed scanner policy
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: 47a8135d72a771aa58841ffb296e6c68b2dd905e
+          path: security-policy
+          persist-credentials: false
+          sparse-checkout: .github/security
+          sparse-checkout-cone-mode: false
 
       - name: Reject incident indicators and automatic editor tasks
-        run: python3 -I .github/security/scan-indicators.py .
+        run: python3 -I security-policy/.github/security/scan-indicators.py candidate
 
       - name: Download and verify Gitleaks
         env:
@@ -70,11 +81,11 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          "$RUNNER_TEMP/gitleaks" dir . --config "$RUNNER_TEMP/gitleaks.toml" \
+          "$RUNNER_TEMP/gitleaks" dir candidate --config "$RUNNER_TEMP/gitleaks.toml" \
             --gitleaks-ignore-path "$RUNNER_TEMP/gitleaks-ignore" --ignore-gitleaks-allow \
             --redact=100 --no-banner --log-level=warn
           if [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ && "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]; then
-            "$RUNNER_TEMP/gitleaks" git . --log-opts="$BASE_SHA..$HEAD_SHA" \
+            "$RUNNER_TEMP/gitleaks" git candidate --log-opts="$BASE_SHA..$HEAD_SHA" \
               --config "$RUNNER_TEMP/gitleaks.toml" --gitleaks-ignore-path "$RUNNER_TEMP/gitleaks-ignore" \
               --ignore-gitleaks-allow --redact=100 --no-banner --log-level=warn
           fi
@@ -84,7 +95,7 @@ jobs:
           SEMGREP_IMAGE: semgrep/semgrep@sha256:32e459968daabe7ab86968184a29109b9564aa00392401156f9788452b42786b
           SEMGREP_RULES_SHA256: a6d09825468d4386afd535433c3186fd05acfee3b25c5d56790921d2d2e4f3e6
         run: |
-          echo "$SEMGREP_RULES_SHA256  .github/security/semgrep-rules.json" | sha256sum --check --status
+          echo "$SEMGREP_RULES_SHA256  security-policy/.github/security/semgrep-rules.json" | sha256sum --check --status
           mkdir "$RUNNER_TEMP/semgrep-results"
           docker pull "$SEMGREP_IMAGE"
           set +e
@@ -95,11 +106,12 @@ jobs:
             -e SEMGREP_SETTINGS_FILE=/tmp/settings.yml -e SEMGREP_LOG_FILE=/tmp/semgrep.log \
             -e GIT_CONFIG_GLOBAL=/tmp/gitconfig \
             -e XDG_CACHE_HOME=/tmp/cache \
-            --mount "type=bind,source=$GITHUB_WORKSPACE,target=/src,readonly" \
+            --mount "type=bind,source=$GITHUB_WORKSPACE/candidate,target=/src,readonly" \
+            --mount "type=bind,source=$GITHUB_WORKSPACE/security-policy,target=/policy,readonly" \
             --mount "type=bind,source=$RUNNER_TEMP/semgrep-results,target=/results" \
-            "$SEMGREP_IMAGE" scan --config /src/.github/security/semgrep-rules.json \
+            "$SEMGREP_IMAGE" scan --config /policy/.github/security/semgrep-rules.json \
             --metrics=off --disable-version-check --no-git-ignore --x-ignore-semgrepignore-files \
-            --disable-nosem --severity=ERROR --error --quiet --json --output /results/findings.json /src
+            --disable-nosem --project-root /src --exclude=.github/security/semgrep-rules.json --error --quiet --json --output /results/findings.json /src
           result=$?
           set -e
           # Keep source snippets in the ephemeral runner; only print locations and rule IDs.
